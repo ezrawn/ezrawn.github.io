@@ -108,6 +108,7 @@ body {
 }
 
 .sidebar__nav a:hover { color: var(--accent); text-decoration: none; }
+.sidebar__nav a.active { color: var(--accent); font-weight: 600; }
 
 /* contact links */
 .contact { display: flex; flex-direction: column; gap: 0.3rem; }
@@ -143,6 +144,57 @@ body {
   color: var(--soft);
 }
 .main p:last-child { margin-bottom: 0; }
+
+/* ---------- sidebar name link ---------- */
+.sidebar__name a { color: inherit; }
+.sidebar__name a:hover { text-decoration: none; color: var(--accent); }
+
+/* ---------- research page ---------- */
+.project {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+.project:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+
+.main h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 0.3rem;
+  color: var(--text);
+}
+
+/* ---------- reading page ---------- */
+.reading-intro { color: var(--faint); margin-bottom: 1.5rem; }
+
+.books {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.book {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+.book:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+
+.book__title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.book__author {
+  font-size: 0.88rem;
+  color: var(--faint);
+  margin-bottom: 0.4rem;
+}
+
+.book__note {
+  margin: 0;
+  color: var(--soft);
+}
 
 /* ---------- mobile ---------- */
 @media (max-width: 640px) {
