@@ -1,0 +1,167 @@
+/* ============================================================
+   Ezra Winter-Nelson — personal site
+   Design tokens live in :root so the whole palette / rhythm
+   can be retuned from one place.
+   ============================================================ */
+
+:root {
+  --font-serif: "Newsreader", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --ink: #1a1a1a;
+  --ink-soft: #4a4a4a;
+  --ink-faint: #8a8a8a;
+  --rule: #e6e6e6;
+  --accent: #7a1f2b;         /* muted crimson — Columbia-adjacent */
+  --accent-hover: #5c1520;
+  --bg: #fdfdfc;
+
+  --measure: 42rem;          /* comfortable reading width */
+  --gap: 1.5rem;
+}
+
+/* ---------- reset ---------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- layout ---------- */
+.page {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 5rem) clamp(1.25rem, 5vw, 2rem) 2rem;
+}
+
+.section { margin-top: clamp(2.5rem, 5vw, 3.5rem); }
+
+/* ---------- hero ---------- */
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(1.5rem, 4vw, 2.5rem);
+}
+
+.portrait {
+  flex: 0 0 auto;
+  width: 140px;
+  height: 140px;
+  margin: 0;
+  border-radius: 50%;
+  background: linear-gradient(160deg, #ececec, #dcdcdc);
+  overflow: hidden;
+}
+
+.portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.hero__intro { flex: 1 1 16rem; }
+
+.name {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  margin: 0 0 0.35rem;
+}
+
+.role {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+
+.affiliation {
+  color: var(--ink-soft);
+  margin: 0 0 1.1rem;
+  line-height: 1.5;
+}
+
+.affiliation__lab {
+  font-size: 0.95rem;
+  color: var(--ink-faint);
+}
+
+/* ---------- links row ---------- */
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 0.75rem;
+}
+
+.link {
+  display: inline-block;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--accent-hover);
+  border-color: var(--accent);
+  background: #fff;
+}
+
+/* ---------- section content ---------- */
+.section__heading {
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.section p { margin: 0 0 1rem; color: var(--ink-soft); }
+.section p:last-child { margin-bottom: 0; }
+
+a {
+  color: var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+a:hover { color: var(--accent-hover); }
+
+/* ---------- footer ---------- */
+.footer {
+  max-width: var(--measure);
+  margin: 3.5rem auto 0;
+  padding: 1.5rem clamp(1.25rem, 5vw, 2rem) 2.5rem;
+  border-top: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+}
+
+.footer p { margin: 0; }
+
+/* ---------- small screens ---------- */
+@media (max-width: 32rem) {
+  .hero { text-align: left; }
+  .portrait { width: 110px; height: 110px; }
+}
