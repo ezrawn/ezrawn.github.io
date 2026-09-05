@@ -233,6 +233,30 @@ body {
   color: var(--soft);
 }
 
+/* ---------- fun page ---------- */
+.fun-item {
+  display: flex;
+  gap: 1.75rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.fun-item__media {
+  flex: 1 1 300px;
+  max-width: 440px;
+}
+
+.fun-item__media img {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+}
+
+.fun-item__body { flex: 1 1 320px; min-width: 0; }
+
+.fun-item__body h3 { margin-top: 0; }
+
 /* ---------- mobile ---------- */
 @media (max-width: 640px) {
   .layout { flex-direction: column; box-shadow: none; }

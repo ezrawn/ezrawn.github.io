@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fun Stuff — Ezra Winter-Nelson</title>
+  <meta name="description" content="Side projects and other things Ezra Winter-Nelson builds for fun.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="layout">
+
+    <!-- ===== SIDEBAR ===== -->
+    <aside class="sidebar">
+      <div class="sidebar__inner">
+
+        <a href="index.html"><img class="photo" src="EWN_headshot.jpg" alt="Ezra Winter-Nelson"></a>
+
+        <h1 class="sidebar__name"><a href="index.html">Ezra Winter-Nelson</a></h1>
+        <p class="sidebar__role">Postdoctoral Research Scientist</p>
+        <p class="sidebar__inst">Columbia University<br>Irving Medical Center</p>
+        <p class="sidebar__lab">Menon Lab · Center for Translational and Computational Neuroimmunology</p>
+
+        <nav class="sidebar__nav">
+          <a href="index.html">About</a>
+          <a href="research.html">Research</a>
+          <a href="reading.html">Reading List</a>
+          <a href="fun.html" class="active">Fun Stuff</a>
+        </nav>
+
+        <ul class="contact">
+          <li><a href="mailto:ew2953@cumc.columbia.edu">Email</a></li>
+          <li><a href="https://scholar.google.com/citations?user=0nz1G6kAAAAJ&hl=en" target="_blank" rel="noopener">Google Scholar</a></li>
+          <li><a href="Winter-Nelson_CV_20260112.pdf">CV</a></li>
+        </ul>
+
+      </div>
+    </aside>
+
+    <!-- ===== MAIN ===== -->
+    <main class="main">
+
+      <section>
+        <h2>Fun Stuff</h2>
+        <p>Side projects I build to think through ideas that don't fit anywhere else.</p>
+
+        <div class="fun-item">
+          <div class="fun-item__media">
+            <img src="draft_graph.png" alt="Directed acyclic graph of fantasy football roster states across draft rounds, nodes colored by the number of start-to-finish paths passing through them.">
+          </div>
+          <div class="fun-item__body">
+            <h3><a href="/draft-strategy/" target="_blank" rel="noopener">Draft Strategy Tool</a></h3>
+            <p>
+              This tool models a fantasy football draft as a directed acyclic graph.
+              Each node is a roster state — how many running backs, receivers, tight
+              ends, and quarterbacks you've drafted so far — and each edge is a single
+              pick that carries you into the next round. Draft rules and positional
+              scarcity prune the full combinatorial space down to a realistic subset,
+              and the resulting network is analyzed for structure: which early picks
+              are high-leverage, which roster states preserve the most downstream
+              flexibility, and which final builds are only reachable through
+              bottleneck states. The goal is to turn draft intuition into something
+              you can see and measure.
+            </p>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="network-bg.js" defer></script>
+</body>
+</html>
