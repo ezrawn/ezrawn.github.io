@@ -327,7 +327,7 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
 </div>
 
 <div id="tab-bar">
-  <button class="tab-btn active" id="tab-init-btn">Rule Initialization</button>
+  <button class="tab-btn" id="tab-init-btn">Rule Initialization</button>
   <button class="tab-btn" id="tab-draft-btn">Draft Mode</button>
   <button class="tab-btn" id="tab-board-btn">Player Board</button>
   <button class="tab-btn" id="tab-saved-btn">Saved Paths</button>
@@ -961,7 +961,7 @@ let bpaMode       = 'strict'; // 'strict' | 'range'
 let rangeBefore   = 3;        // picks before: ADP >= pick - rangeBefore
 let rangeAfter    = 8;        // picks after:  ADP <= pick + rangeAfter
 let rankHighlight = null;     // { pathIdx, nodeSet, edgeSet }
-let activeTab     = 'init';
+let activeTab     = 'info';
 let boardSort     = { col: 'adp', dir: 1 };
 let boardFilters  = { pos: new Set(['RB','WR','TE','QB']), status: 'all',
                       adpMin:'', adpMax:'', valMin:'', valMax:'', search:'' };
@@ -1444,7 +1444,8 @@ function undoPick() {
 
 function resetDraft() {
   draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null;
-  if (!selectedNodes.size) renderPanel(null);
+  selectedNodes.clear();
+  renderPanel(null);
   renderAll();
   rankHighlight = null;
   renderPathRankings();
@@ -3037,6 +3038,7 @@ document.getElementById('tab-draft-btn').addEventListener('click', () => switchT
 document.getElementById('tab-board-btn').addEventListener('click', () => switchTab('board'));
 document.getElementById('tab-saved-btn').addEventListener('click', () => switchTab('saved'));
 document.getElementById('tab-info-btn').addEventListener('click',  () => switchTab('info'));
+switchTab('info');
 
 // Board: column sort
 document.getElementById('board-thead').addEventListener('click', e => {
