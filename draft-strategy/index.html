@@ -1572,20 +1572,32 @@ function renderAll() {
   // Edges from the hovered or selected node get thick, position-colored lines+arrows.
   // Opacity is at element level so the marker fades in sync with the line.
   // CSS .edge overrides attr(), so use style() for stroke/stroke-width.
+
+  // For multi-select: only the highest-round selected node fans out; earlier selected
+  // nodes show only the connecting edge to the next selected node.
+  const selSeq = [...selectedNodes].sort((a, b) => gNodes[a].round - gNodes[b].round);
+  const lastSelNode = selSeq.length > 0 ? selSeq[selSeq.length - 1] : null;
+  const selConnEdges = new Set();
+  for (let i = 0; i + 1 < selSeq.length; i++) {
+    const ci = gEdges.findIndex(e => e.source === selSeq[i] && e.target === selSeq[i + 1]);
+    if (ci >= 0) selConnEdges.add(ci);
+  }
+
   gEdgeSels.each(function(d, ei) {
     const isPath     = pathEdges.has(ei);
-    const isSelSrc   = selectedNodes.has(d.source);
+    const isSelSrc   = lastSelNode !== null && d.source === lastSelNode;
+    const isSelConn  = selConnEdges.has(ei);
     const isHovSrc   = hov && d.source === hov.index;
     const isRankEdge = rankHighlight && rankHighlight.edgeSet.has(ei);
     const srcOk    = reach.has(d.source) || draftPath.includes(d.source);
     const tgtOk    = reach.has(d.target) || draftPath.includes(d.target);
     const draftDim = draftMode && !srcOk && !tgtOk;
-    const selDim   = (selectedNodes.size > 0 || hov) && !isSelSrc && !isHovSrc && !isPath && !isRankEdge;
+    const selDim   = (selectedNodes.size > 0 || hov) && !isSelSrc && !isSelConn && !isHovSrc && !isPath && !isRankEdge;
 
     let color, width, opacity, marker;
     if (isPath) {
       color = PICK_COLORS[d.pos] ?? '#c95f0a'; width = 2.5; opacity = 0.88; marker = POS_MARKERS[d.pos] ?? 'arr-orange';
-    } else if (isSelSrc) {
+    } else if (isSelSrc || isSelConn) {
       color   = PICK_COLORS[d.pos]  ?? '#185FA5';
       marker  = POS_MARKERS[d.pos]  ?? 'arr-blue';
       width   = 3.5; opacity = 0.9;
