@@ -1,0 +1,3155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fantasy Draft Strategy Network</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #fafafa; color: #222; font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Header */
+#header { padding: 7px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-bottom: 1px solid #ddd; flex-shrink: 0; background: #fff; }
+#header h1 { font-size: 1rem; color: #333; white-space: nowrap; font-weight: 500; }
+
+/* Draft bar */
+#draft-bar { display: none; padding: 5px 16px; border-bottom: 1px solid #ddd; background: #fff; align-items: center; gap: 20px; flex-shrink: 0; font-size: 0.78rem; }
+#draft-bar.active { display: flex; }
+.dsec { display: flex; align-items: center; gap: 6px; }
+.dlabel { color: #aaa; font-size: 0.72rem; white-space: nowrap; }
+.dval { color: #333; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 14px; }
+.pickbtn { padding: 3px 10px; border: 1px solid #ddd; background: #fafafa; color: #aaa; border-radius: 3px; cursor: default; font-size: 0.76rem; font-weight: 600; }
+.pickbtn.valid { border-color: #185FA5; color: #185FA5; background: #fff; cursor: pointer; }
+.pickbtn.valid:hover { background: #f0f5fb; }
+.dactbtn { padding: 3px 9px; border: 1px solid #ddd; background: #fafafa; color: #666; border-radius: 3px; cursor: pointer; font-size: 0.76rem; }
+.dactbtn:hover:not(:disabled) { border-color: #888; color: #333; }
+.dactbtn:disabled { color: #ccc; cursor: default; }
+#draft-status { color: #185FA5; font-weight: 600; font-size: 0.78rem; margin-left: auto; }
+
+/* Main */
+#main { display: flex; flex: 1; overflow: hidden; }
+
+/* Rules panel */
+#rules-panel { width: 228px; flex-shrink: 0; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; overflow: hidden; font-size: 0.76rem; }
+.rpanel-head { padding: 8px 10px 6px; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 5px; flex-shrink: 0; flex-wrap: wrap; }
+.rpanel-head h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; flex: 1; min-width: 100%; margin-bottom: 4px; }
+.rpanel-hbtn { padding: 2px 7px; border: 1px solid #ddd; background: #fafafa; color: #666; border-radius: 3px; cursor: pointer; font-size: 0.7rem; white-space: nowrap; }
+.rpanel-hbtn:hover { border-color: #888; color: #333; }
+.rounds-row { display: flex; align-items: center; gap: 5px; width: 100%; margin-bottom: 2px; }
+.rounds-row label { color: #aaa; font-size: 0.7rem; }
+#rounds-input { width: 38px; padding: 2px 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 0.72rem; background: #fafafa; color: #333; text-align: center; }
+#rules-list { flex: 1; overflow-y: auto; padding: 4px 0; }
+.rule-row { display: flex; align-items: flex-start; gap: 5px; padding: 4px 10px; }
+.rule-row:hover { background: #f9f9f9; }
+.rule-toggle { margin-top: 2px; cursor: pointer; accent-color: #185FA5; flex-shrink: 0; }
+.rule-text { flex: 1; color: #333; line-height: 1.35; }
+.rule-text.off { color: #bbb; text-decoration: line-through; }
+.rule-del { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1.1rem; line-height: 1; padding: 0 1px; flex-shrink: 0; }
+.rule-del:hover { color: #c33; }
+.rules-empty { color: #bbb; font-style: italic; padding: 10px 12px; font-size: 0.73rem; }
+
+/* Add rule form */
+#add-rule-form { border-top: 1px solid #eee; padding: 8px 12px 10px; flex-shrink: 0; }
+#add-rule-form h4 { font-size: 0.68rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 7px; }
+.rf-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+.rf-row label { color: #aaa; font-size: 0.7rem; min-width: 38px; }
+.rf-row select, .rf-row input { flex: 1; padding: 2px 5px; border: 1px solid #ddd; border-radius: 3px; font-size: 0.72rem; background: #fafafa; color: #333; min-width: 0; }
+.rf-row input[type=number] { max-width: 48px; flex: none; }
+#add-rule-btn { width: 100%; padding: 4px; border: 1px solid #185FA5; background: #f0f5fb; color: #185FA5; border-radius: 3px; cursor: pointer; font-size: 0.72rem; margin-top: 3px; }
+#add-rule-btn:hover { background: #ddeaf8; }
+#graph-status { padding: 5px 12px; font-size: 0.69rem; color: #aaa; border-top: 1px solid #eee; flex-shrink: 0; line-height: 1.5; }
+
+/* Graph & info panel */
+#graph-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 6px 8px; background: #fafafa; min-width: 0; }
+svg#graph { display: block; width: auto; height: 70vh; }
+#panel { width: 306px; flex-shrink: 0; background: #fff; border-left: 1px solid #ddd; padding: 12px; overflow-y: auto; }
+#panel h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 8px; padding-bottom: 5px; border-bottom: 1px solid #eee; }
+.prow { display: flex; justify-content: space-between; padding: 2px 0; font-size: 0.78rem; }
+.plabel { color: #aaa; }
+.pval { color: #333; font-variant-numeric: tabular-nums; }
+.pval.hi { color: #185FA5; font-weight: 600; }
+.psep { border: none; border-top: 1px solid #f0f0f0; margin: 5px 0; }
+.phint { color: #bbb; font-style: italic; font-size: 0.75rem; line-height: 1.6; }
+/* Draft path tracker */
+#draft-tracker { margin-top: 14px; border-top: 1px solid #eee; padding-top: 10px; }
+/* Path rankings */
+#val-section { margin-top: 14px; border-top: 1px solid #eee; padding-top: 10px; }
+#val-section h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 7px; }
+.val-inputs { display: flex; align-items: center; gap: 5px; margin-bottom: 6px; font-size: 0.76rem; color: #aaa; }
+.val-inputs input { width: 36px; border: 1px solid #ddd; border-radius: 3px; padding: 2px 3px; font-size: 0.76rem; text-align: center; background: #fff; }
+.bpa-row { display: flex; align-items: center; gap: 4px; margin-bottom: 7px; flex-wrap: wrap; }
+.bpa-btn { padding: 2px 7px; border: 1px solid #ddd; background: #fafafa; color: #888; border-radius: 3px; cursor: pointer; font-size: 0.7rem; }
+.bpa-btn.active { border-color: #185FA5; color: #185FA5; background: #f0f5fb; }
+.range-inputs { display: flex; align-items: center; gap: 3px; color: #aaa; font-size: 0.72rem; margin-left: 2px; }
+.range-inputs input { width: 30px; border: 1px solid #ddd; border-radius: 3px; padding: 2px 3px; font-size: 0.72rem; text-align: center; background: #fff; }
+.range-label { font-size: 0.59rem; color: #bbb; font-style: italic; white-space: nowrap; }
+.pr-row { display: flex; align-items: center; gap: 4px; padding: 3px 4px; border-radius: 3px; cursor: pointer; flex-wrap: wrap; }
+.pr-nv { font-size: 0.6rem; font-variant-numeric: tabular-nums; padding: 1px 4px; border-radius: 3px; flex-shrink: 0; white-space: nowrap; }
+.pr-nv-ok   { color: #15803D; background: #f0fdf4; }
+.pr-nv-warn { color: #a16207; background: #fefce8; }
+.pr-nv-risk { color: #dc2626; background: #fef2f2; }
+.pr-row:hover { background: #f5f5f5; }
+.pr-row.active { background: #f0faf4; outline: 1px solid #bbdfcc; }
+.pr-rank { color: #ccc; width: 14px; flex-shrink: 0; font-size: 0.68rem; text-align: right; }
+.pr-seq { flex: 1; font-size: 0.7rem; }
+.pr-sep { color: #ddd; }
+.pr-pos { font-weight: 700; }
+.pr-pos-sel { font-weight: 900; border-bottom: 2px solid currentColor; }
+.pr-val { font-weight: 600; font-size: 0.74rem; font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; color: #15803D; }
+.pr-val.neg { color: #dc2626; }
+#sel-clear-btn { font-size: 0.62rem; color: #999; background: none; border: none; cursor: pointer; padding: 0 2px; }
+#sel-clear-btn:hover { color: #dc2626; }
+#paths-through { margin-top: 14px; border-top: 1px solid #eee; padding-top: 10px; }
+#paths-through h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+#draft-tracker h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 6px; }
+.dt-pick { display: flex; align-items: center; gap: 5px; padding: 2px 0; }
+.dt-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dt-round { color: #aaa; width: 22px; font-size: 0.72rem; flex-shrink: 0; }
+.dt-pos { font-weight: 700; font-size: 0.78rem; min-width: 24px; }
+.dt-pickval { margin-left: auto; font-size: 0.73rem; font-weight: 600; color: #15803D; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.dt-pickval.neg { color: #dc2626; }
+.dt-running { font-size: 0.68rem; color: #aaa; font-variant-numeric: tabular-nums; min-width: 42px; text-align: right; flex-shrink: 0; }
+.dt-running.neg { color: #dc2626; }
+.dt-summary { margin-top: 8px; padding-top: 6px; border-top: 1px solid #f0f0f0; }
+.dt-pos-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.dt-pos-entry { font-size: 0.72rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dt-pos-entry .pv { font-weight: 400; color: #555; }
+.dt-pos-entry .pv.neg { color: #dc2626; }
+.dt-total-row { font-size: 0.75rem; color: #555; font-variant-numeric: tabular-nums; }
+.dt-total-row strong { color: #222; }
+.neg { color: #dc2626; }
+.dt-sac { font-size: 0.65rem; color: #e08c2c; font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; flex-shrink: 0; }
+.dt-sac.zero { color: #15803D; }
+/* Lineup projection panel */
+.lp-summary { margin-bottom: 7px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; }
+.lp-total-row { display: flex; justify-content: space-between; font-size: 0.77rem; padding: 1px 0; }
+.lp-label { color: #aaa; }
+.lp-pick { display: flex; align-items: baseline; gap: 5px; padding: 2px 0; }
+.lp-past { opacity: 0.55; }
+.lp-round { font-weight: 700; font-size: 0.71rem; min-width: 46px; flex-shrink: 0; }
+.lp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.74rem; color: #333; }
+.lp-val { font-size: 0.73rem; font-weight: 600; color: #15803D; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.lp-val.neg { color: #dc2626; }
+.lp-tag { color: #f59e0b; margin-right: 2px; font-size: 0.72rem; }
+.lp-tag.lp-tag-ok { color: #15803D; }
+.lp-reroll-btn { padding: 1px 7px; border: 1px solid #ddd; background: #fafafa; color: #666; border-radius: 3px; cursor: pointer; font-size: 0.7rem; white-space: nowrap; }
+.lp-reroll-btn:hover { border-color: #185FA5; color: #185FA5; background: #f0f5fb; }
+
+/* Legend */
+#legend-row { padding: 5px 14px; display: flex; align-items: center; gap: 10px; border-top: 1px solid #ddd; flex-shrink: 0; font-size: 0.72rem; background: #fff; }
+#legend-title { color: #999; min-width: 88px; }
+canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid #ddd; }
+.ltick { color: #aaa; min-width: 36px; font-variant-numeric: tabular-nums; }
+#lmax { text-align: right; }
+
+/* SVG elements */
+.edge { stroke: #bbb; stroke-width: 1.9; }
+.ncirc { stroke: #666; stroke-width: 0.8; cursor: pointer; }
+.nlabel { font-size: 11px; font-weight: 700; font-family: 'Courier New', Courier, monospace; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.nval { font-size: 7.5px; fill: #aaa; text-anchor: middle; pointer-events: none; }
+.rlabel { font-size: 12px; fill: #bbb; }
+.pos-legend { font-size: 9px; fill: #ccc; }
+.empty-msg { font-size: 13px; fill: #bbb; text-anchor: middle; dominant-baseline: middle; }
+/* Excluded nodes section in rules panel */
+#excl-section { border-top: 1px solid #eee; flex-shrink: 0; }
+.excl-head { padding: 5px 10px 3px; display: flex; align-items: center; }
+.excl-head span { font-size: 0.68rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.07em; flex: 1; }
+#excl-list { padding: 0 0 4px; max-height: 96px; overflow-y: auto; }
+.excl-row { display: flex; align-items: center; gap: 5px; padding: 2px 10px; }
+.excl-row:hover { background: #f9f9f9; }
+.excl-lbl { flex: 1; font-family: 'Courier New', Courier, monospace; font-size: 0.75rem; color: #bbb; text-decoration: line-through; }
+.excl-restore { background: none; border: none; color: #ccc; cursor: pointer; font-size: 0.9rem; padding: 0 2px; line-height: 1; }
+.excl-restore:hover { color: #185FA5; }
+/* Exclude button in info panel */
+#panel-actions { margin-top: 10px; }
+.excl-btn { width: 100%; padding: 4px; border: 1px solid #dcc; background: #fff9f9; color: #a44; border-radius: 3px; cursor: pointer; font-size: 0.72rem; }
+.excl-btn:hover { background: #ffe8e8; border-color: #a44; color: #833; }
+
+/* Draft sidebar */
+#draft-sidebar { width: 306px; flex-shrink: 0; background: #fff; border-right: 1px solid #ddd; display: none; flex-direction: column; overflow: hidden; }
+#draft-sidebar.visible { display: flex; }
+.dsb-head { padding: 8px 12px 6px; border-bottom: 1px solid #eee; flex-shrink: 0; }
+.dsb-head h3 { font-size: 0.72rem; color: #999; text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 2px; }
+.dsb-pick-lbl { font-size: 0.72rem; color: #666; }
+#dsb-body { flex: 1; overflow-y: auto; padding: 4px 10px 8px; font-size: 0.76rem; }
+.dsb-pos-head { font-weight: 700; font-size: 0.72rem; margin: 8px 0 3px; padding-bottom: 2px; border-bottom: 1px solid #f0f0f0; }
+.dsb-player { display: flex; align-items: center; gap: 4px; padding: 2px 3px; cursor: pointer; border-radius: 3px; }
+.dsb-player:hover { background: #f3f7ff; }
+.dsb-avail { font-size: 0.61rem; font-weight: 700; padding: 1px 4px; border-radius: 2px; flex-shrink: 0; width: 40px; text-align: center; letter-spacing: 0.01em; }
+.dsb-avail.avt { background: #f0faf4; color: #15803D; border: 1px solid #bbdfcc; }
+.dsb-avail.avd { background: #eff6ff; color: #1D4ED8; border: 1px solid #bfdbfe; }
+.dsb-avail.avr { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+.dsb-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333; }
+.dsb-name.tagged { font-weight: 700; color: #15803D; }
+.dsb-adp { color: #aaa; font-size: 0.71rem; font-variant-numeric: tabular-nums; min-width: 22px; text-align: right; flex-shrink: 0; }
+.dsb-val { font-size: 0.71rem; font-variant-numeric: tabular-nums; min-width: 32px; text-align: right; flex-shrink: 0; }
+.dsb-val.vpos { color: #15803D; }
+.dsb-val.vneg { color: #dc2626; }
+/* Path ranking past picks */
+.pr-past-pos { font-weight: 700; opacity: 0.42; }
+.pr-divline { color: #c8c8c8; margin: 0 3px; font-size: 0.9rem; vertical-align: middle; }
+
+/* Tab bar */
+#tab-bar { display: flex; background: #fff; border-bottom: 2px solid #ddd; flex-shrink: 0; padding: 0 16px; }
+.tab-btn { padding: 8px 18px; background: none; border: none; border-bottom: 2px solid transparent; color: #888; cursor: pointer; font-size: 0.83rem; margin-bottom: -2px; }
+.tab-btn:hover { color: #333; }
+.tab-btn.active { color: #185FA5; border-bottom-color: #185FA5; font-weight: 600; }
+
+/* Player Board */
+#board-view { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+#board-toolbar { padding: 8px 14px; background: #fff; border-bottom: 1px solid #eee; flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; font-size: 0.79rem; }
+.btb-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.board-search { padding: 4px 8px; border: 1px solid #ddd; border-radius: 3px; font-size: 0.79rem; width: 180px; }
+.pos-filters { display: flex; gap: 6px; }
+.pos-cb { display: flex; align-items: center; gap: 3px; cursor: pointer; color: #555; font-size: 0.78rem; }
+.pos-cb input { accent-color: #185FA5; cursor: pointer; }
+.sfbtn { padding: 2px 8px; border: 1px solid #ddd; background: #fafafa; color: #777; border-radius: 3px; cursor: pointer; font-size: 0.73rem; }
+.sfbtn.active { border-color: #185FA5; color: #185FA5; background: #f0f5fb; font-weight: 600; }
+.btb-sep { flex: 1; }
+#board-count { color: #bbb; font-size: 0.72rem; white-space: nowrap; }
+.btb-label { color: #aaa; font-size: 0.74rem; }
+.range-in { width: 52px; padding: 2px 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 0.76rem; text-align: center; }
+.batch-btn { padding: 2px 8px; border: 1px solid #ddd; background: #fafafa; color: #666; border-radius: 3px; cursor: pointer; font-size: 0.72rem; white-space: nowrap; }
+.batch-btn:hover { border-color: #888; color: #333; }
+#board-table-wrap { flex: 1; overflow: auto; }
+#board-table { width: 100%; border-collapse: collapse; font-size: 0.81rem; }
+#board-table thead { position: sticky; top: 0; z-index: 2; }
+#board-table th { background: #fafafa; border-bottom: 2px solid #ddd; padding: 6px 10px; text-align: left; cursor: pointer; user-select: none; color: #666; font-weight: 500; font-size: 0.76rem; white-space: nowrap; }
+#board-table th:hover { color: #185FA5; }
+#board-table th.bth-active { color: #185FA5; }
+#board-table td { padding: 5px 10px; border-bottom: 1px solid #f3f3f3; vertical-align: middle; }
+.board-row:hover td { background: #fafffe; }
+.board-row.target-row td { background: #f2fbf5; }
+.board-row.target-row:hover td { background: #eaf7ef; }
+.board-row.target-row td:first-child { border-left: 3px solid #15803D; }
+.board-row.avoid-row td { background: #fdf5f5; }
+.board-row.avoid-row:hover td { background: #faeaea; }
+.board-row.avoid-row td:first-child { border-left: 3px solid #dc2626; }
+.board-row.avoid-row .player-name { text-decoration: line-through; color: #bbb; }
+.pos-badge { font-weight: 700; font-size: 0.75rem; }
+.td-num { text-align: right; font-variant-numeric: tabular-nums; }
+.td-neg { color: #dc2626; }
+.td-tag { white-space: nowrap; }
+.tag-btn { padding: 2px 6px; border: 1px solid #e0e0e0; background: #fafafa; border-radius: 3px; cursor: pointer; font-size: 0.72rem; color: #bbb; }
+.tag-btn.target-btn.on { border-color: #15803D; color: #15803D; background: #edfaf3; }
+.tag-btn.avoid-btn.on  { border-color: #dc2626; color: #dc2626; background: #fef2f2; }
+.tag-btn:hover { border-color: #888; }
+.ideal-rd-in { width: 40px; padding: 2px 4px; border: 1px solid #ddd; border-radius: 3px; font-size: 0.76rem; text-align: center; }
+.td-stars .star { cursor: pointer; color: #d1d5db; font-size: 0.9rem; }
+.td-stars .star.filled { color: #f59e0b; }
+.td-stars .star-empty { color: #e5e7eb; font-size: 0.78rem; }
+.td-muted { color: #ccc; font-size: 0.75rem; }
+.board-empty { text-align: center; color: #bbb; padding: 40px; font-style: italic; }
+
+/* Three-section path rankings */
+.pr-section-head { font-size: 0.61rem; text-transform: uppercase; letter-spacing: 0.07em; color: #bbb; margin: 8px 0 1px; padding: 0 2px; }
+.pr-next-head { font-size: 0.69rem; font-weight: 700; padding: 2px 4px; }
+.pr-next-head.pr-muted { opacity: 0.3; }
+.pr-no-paths-msg { font-size: 0.67rem; color: #ccc; font-style: italic; padding: 0 18px 3px; }
+
+/* Muted projected players in lineup */
+.lp-proj { opacity: 0.38; font-style: italic; }
+
+/* Save path button */
+.lp-save-btn { padding: 2px 7px; border: 1px solid #185FA5; color: #185FA5; background: none; border-radius: 3px; font-size: 0.68rem; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.lp-save-btn:hover { background: #f0f5fb; }
+.lp-save-btn:disabled { border-color: #ccc; color: #ccc; cursor: default; }
+
+/* Graph wrap legend overlay */
+#graph-wrap { position: relative; }
+#graph-legend { position: absolute; bottom: 32px; left: 14px; background: rgba(255,255,255,0.94); border: 1px solid #e0e0e0; border-radius: 5px; padding: 6px 9px 6px; pointer-events: none; min-width: 122px; }
+#gl-bar { display: block; border-radius: 2px; border: 1px solid #e0e0e0; }
+
+/* Info page */
+#info-view { display: none; flex: 1; overflow-y: auto; background: #fafafa; }
+#info-wrap { max-width: 780px; margin: 0 auto; padding: 32px 28px 64px; }
+#info-wrap h1 { font-size: 1.4rem; color: #1a1a1a; margin-bottom: 4px; }
+#info-wrap .info-subtitle { color: #888; font-size: 0.88rem; margin-bottom: 36px; }
+#info-wrap h2 { font-size: 1.0rem; color: #185FA5; font-weight: 700; margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 2px solid #e8f0fa; }
+#info-wrap h3 { font-size: 0.88rem; font-weight: 700; color: #222; margin: 18px 0 6px; }
+#info-wrap p { font-size: 0.83rem; color: #444; line-height: 1.7; margin-bottom: 10px; }
+#info-wrap ul, #info-wrap ol { font-size: 0.83rem; color: #444; line-height: 1.7; margin: 0 0 10px 0; padding-left: 22px; }
+#info-wrap li { margin-bottom: 3px; }
+#info-wrap strong { color: #222; }
+#info-wrap code { font-family: 'Courier New', monospace; font-size: 0.8rem; background: #f0f0f0; padding: 1px 5px; border-radius: 3px; color: #333; }
+.info-callout { background: #f0f5fb; border-left: 3px solid #185FA5; padding: 10px 14px; border-radius: 0 4px 4px 0; margin: 12px 0; font-size: 0.82rem; color: #334; line-height: 1.65; }
+.info-callout.tip { background: #f0fdf4; border-color: #15803D; }
+.info-callout.warn { background: #fefce8; border-color: #a16207; }
+.info-metric-row { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.info-metric { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 10px 14px; flex: 1; min-width: 180px; }
+.info-metric-name { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.07em; color: #aaa; margin-bottom: 3px; }
+.info-metric-desc { font-size: 0.8rem; color: #444; line-height: 1.55; }
+.info-toc { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; padding: 12px 16px; margin-bottom: 32px; font-size: 0.8rem; }
+.info-toc-title { font-weight: 700; color: #555; margin-bottom: 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.07em; }
+.info-toc a { color: #185FA5; text-decoration: none; display: block; padding: 1px 0; }
+.info-toc a:hover { text-decoration: underline; }
+.info-pos { font-weight: 700; }
+.info-pos.rb { color: #1D4ED8; }
+.info-pos.wr { color: #D97706; }
+.info-pos.te { color: #0D9488; }
+.info-pos.qb { color: #9333EA; }
+.info-badge { font-size: 0.65rem; padding: 1px 5px; border-radius: 3px; font-weight: 600; white-space: nowrap; }
+.info-badge.ok  { color: #15803D; background: #f0fdf4; }
+.info-badge.warn { color: #a16207; background: #fefce8; }
+.info-badge.risk { color: #dc2626; background: #fef2f2; }
+
+/* Saved paths page */
+#saved-view { display: none; flex: 1; flex-direction: row; overflow: hidden; background: #fafafa; }
+#saved-content { width: 50%; flex-shrink: 0; overflow-y: auto; overflow-x: hidden; padding: 16px; border-right: 1px solid #e4e4e4; box-sizing: border-box; }
+#saved-viz { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+#saved-viz-inner { flex: 1; overflow: hidden; position: relative; }
+#saved-viz-inner svg { display: block; width: 100%; height: 100%; }
+.sv-viz-hdr { font-size: 0.62rem; color: #aaa; text-transform: uppercase; letter-spacing: 0.07em; padding: 7px 12px 4px; border-bottom: 1px solid #f0f0f0; flex-shrink: 0; }
+.sv-viz-empty { color: #ccc; font-size: 0.8rem; padding: 24px 16px; text-align: center; }
+.sv-viz-cb { accent-color: var(--sv-col, #555); width: 11px; height: 11px; cursor: pointer; vertical-align: middle; margin-left: 4px; }
+.sv-col-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 3px; vertical-align: middle; flex-shrink: 0; }
+.sv-empty { color: #bbb; font-style: italic; font-size: 0.8rem; padding: 8px 0; }
+.sv-del { font-size: 0.68rem; color: #dc2626; background: none; border: none; cursor: pointer; padding: 0 2px; line-height: 1; vertical-align: middle; }
+.sv-table { border-collapse: collapse; font-size: 0.68rem; white-space: nowrap; font-variant-numeric: tabular-nums; width: 100%; table-layout: fixed; }
+.sv-table col.sv-label-col { width: 26%; }
+.sv-table col.sv-path-col { width: 14.8%; }
+.sv-table th { background: #f2f2f2; font-weight: 600; color: #444; padding: 4px 9px; border: 1px solid #ddd; text-align: center; font-size: 0.68rem; }
+.sv-table td { padding: 3px 8px; border: none; border-bottom: 1px solid #f2f2f2; text-align: center; }
+.sv-table td.sv-rlabel { text-align: left; color: #aaa; font-size: 0.64rem; padding-left: 10px; font-family: 'Courier New', monospace; }
+.sv-table td.sv-slabel { text-align: left; color: #888; font-size: 0.66rem; padding-left: 10px; }
+.sv-section-row td { background: #eef3fb !important; color: #185FA5; font-weight: 700; font-size: 0.59rem; text-transform: uppercase; letter-spacing: 0.08em; text-align: left; padding: 4px 9px; border-bottom: 1px solid #c8d8f0; }
+.sv-val-cell { font-size: 0.76rem; }
+.sv-good    { color: #15803D; font-weight: 700; }
+.sv-ok      { color: #a16207; font-weight: 700; }
+.sv-bad     { color: #dc2626; font-weight: 700; }
+.sv-neutral { color: #444;    font-weight: 700; }
+.sv-seq-table { margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>Draft Strategy Network</h1>
+</div>
+
+<div id="tab-bar">
+  <button class="tab-btn active" id="tab-init-btn">Rule Initialization</button>
+  <button class="tab-btn" id="tab-draft-btn">Draft Mode</button>
+  <button class="tab-btn" id="tab-board-btn">Player Board</button>
+  <button class="tab-btn" id="tab-saved-btn">Saved Paths</button>
+  <button class="tab-btn" id="tab-info-btn">Info</button>
+</div>
+
+<div id="draft-bar">
+  <div class="dsec">
+    <span class="dlabel">Round</span>
+    <span class="dval" id="d-round">1</span>
+    <span class="dlabel">of <span id="d-maxround">10</span></span>
+  </div>
+  <div class="dsec">
+    <span class="dlabel">RB</span><span class="dval" id="d-rb">0</span>
+    <span class="dlabel">WR</span><span class="dval" id="d-wr">0</span>
+    <span class="dlabel">TE</span><span class="dval" id="d-te">0</span>
+    <span class="dlabel">QB</span><span class="dval" id="d-qb">0</span>
+  </div>
+  <div class="dsec">
+    <span class="dlabel">Pick:</span>
+    <button class="pickbtn" data-pos="0">RB</button>
+    <button class="pickbtn" data-pos="1">WR</button>
+    <button class="pickbtn" data-pos="2">TE</button>
+    <button class="pickbtn" data-pos="3">QB</button>
+  </div>
+  <div class="dsec">
+    <button class="dactbtn" id="undo-btn" disabled>↩ Undo</button>
+    <button class="dactbtn" id="reset-btn">↺ Reset</button>
+  </div>
+  <span id="draft-status"></span>
+</div>
+
+<div id="main">
+  <div id="draft-sidebar">
+    <div class="dsb-head">
+      <h3>Available Players</h3>
+      <div class="dsb-pick-lbl" id="dsb-pick-lbl"></div>
+    </div>
+    <div id="dsb-body"></div>
+  </div>
+  <div id="rules-panel">
+    <div class="rpanel-head">
+      <h3>Graph Rules</h3>
+      <div class="rounds-row">
+        <label for="rounds-input">Rounds:</label>
+        <input type="number" id="rounds-input" min="1" max="16" value="10">
+        <button class="rpanel-hbtn" id="load-seed-btn" title="Load the exact 25-node seed (7 rounds)">Load seed</button>
+        <button class="rpanel-hbtn" id="reset-rules-btn" title="Restore default rules">Reset</button>
+      </div>
+    </div>
+    <div id="rules-list"></div>
+    <div id="add-rule-form">
+      <h4>Add Rule</h4>
+      <div class="rf-row">
+        <label>Type</label>
+        <select id="rf-type">
+          <option value="no_pos_before">No [pos] before round R</option>
+          <option value="max_count">At most N [pos]</option>
+          <option value="min_by_round">At least N [pos] by round R</option>
+          <option value="max_by_round">At most N [pos] by round R</option>
+        </select>
+      </div>
+      <div class="rf-row">
+        <label>Pos</label>
+        <select id="rf-pos">
+          <option value="0">RB</option>
+          <option value="1">WR</option>
+          <option value="2" selected>TE</option>
+          <option value="3">QB</option>
+        </select>
+      </div>
+      <div class="rf-row" id="rf-count-row" style="display:none">
+        <label>Count</label>
+        <input type="number" id="rf-count" min="0" max="8" value="1">
+      </div>
+      <div class="rf-row" id="rf-round-row">
+        <label>Round</label>
+        <input type="number" id="rf-round" min="1" max="16" value="3">
+      </div>
+      <button id="add-rule-btn">+ Add Rule</button>
+    </div>
+    <div id="graph-status"></div>
+    <div id="excl-section" style="display:none">
+      <div class="excl-head">
+        <span>Excluded</span>
+        <button class="rpanel-hbtn" id="clear-excl-btn">Clear all</button>
+      </div>
+      <div id="excl-list"></div>
+    </div>
+  </div>
+
+  <div id="graph-wrap">
+    <svg id="graph"></svg>
+    <div id="graph-legend">
+      <div style="font-size:0.57rem;color:#bbb;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px">Global flexibility</div>
+      <canvas id="gl-bar" width="110" height="10"></canvas>
+      <div style="font-size:0.57rem;color:#bbb;text-transform:uppercase;letter-spacing:0.06em;margin:5px 0 2px">Local flexibility</div>
+      <svg width="110" height="40" style="display:block">
+        <circle cx="6" cy="10" r="5" fill="#dde6f0" stroke="#aaa" stroke-width="0.6"/>
+        <circle cx="88" cy="10" r="9" fill="#dde6f0" stroke="#aaa" stroke-width="0.6"/>
+        <line x1="0" y1="26" x2="102" y2="26" stroke="#ccc" stroke-width="1"/>
+        <polygon points="102,23 110,26 102,29" fill="#ccc"/>
+        <text x="55" y="38" font-size="7" fill="#bbb" text-anchor="middle">more flexible</text>
+      </svg>
+    </div>
+  </div>
+
+  <div id="panel">
+    <h3>Projected Lineup</h3>
+    <div id="panel-body"><p class="phint">Select a path from the rankings to see a projected lineup</p></div>
+    <div id="panel-actions"></div>
+    <div id="paths-through"></div>
+    <div id="draft-tracker"></div>
+    <div id="val-section">
+      <h3 style="display:flex;justify-content:space-between;align-items:center">Path Rankings <button id="sel-clear-btn" style="display:none">× clear selection</button></h3>
+      <div class="val-inputs">
+        <span>Slot</span>
+        <input type="number" id="slot-in" min="1" max="24" value="5">
+        <span>Size</span>
+        <input type="number" id="size-in" min="4" max="24" value="10">
+      </div>
+      <div class="bpa-row">
+        <button class="bpa-btn active" id="bpa-strict">Strict</button>
+        <button class="bpa-btn" id="bpa-range">Range</button>
+        <span class="range-inputs" id="range-inputs" style="display:none">
+          <span class="range-label">good luck</span>
+          <span>−</span><input type="number" id="range-before" value="3" min="0" max="999">
+          <span>/+</span><input type="number" id="range-after" value="8" min="0" max="999">
+          <span class="range-label">reaches</span>
+        </span>
+      </div>
+      <div id="path-list"></div>
+    </div>
+  </div>
+</div>
+
+<div id="legend-row">
+  <span id="legend-title">—</span>
+  <canvas id="lbar" width="220" height="13"></canvas>
+  <span class="ltick" id="lmin">—</span>
+  <span class="ltick" id="lmax">—</span>
+</div>
+
+<div id="board-view">
+  <div id="board-toolbar">
+    <div class="btb-row">
+      <input type="text" id="board-search" placeholder="Search players…" class="board-search">
+      <div class="pos-filters">
+        <label class="pos-cb"><input type="checkbox" class="pos-filter-cb" value="RB" checked> RB</label>
+        <label class="pos-cb"><input type="checkbox" class="pos-filter-cb" value="WR" checked> WR</label>
+        <label class="pos-cb"><input type="checkbox" class="pos-filter-cb" value="TE" checked> TE</label>
+        <label class="pos-cb"><input type="checkbox" class="pos-filter-cb" value="QB" checked> QB</label>
+      </div>
+      <div class="pos-filters">
+        <button class="sfbtn active" data-sf="all">All</button>
+        <button class="sfbtn" data-sf="target">Targets</button>
+        <button class="sfbtn" data-sf="avoid">Avoids</button>
+        <button class="sfbtn" data-sf="untagged">Untagged</button>
+      </div>
+      <span class="btb-sep"></span>
+      <span id="board-count"></span>
+    </div>
+    <div class="btb-row">
+      <span class="btb-label">ADP</span>
+      <input type="number" id="adp-min" placeholder="min" class="range-in">
+      <span class="btb-label">–</span>
+      <input type="number" id="adp-max" placeholder="max" class="range-in">
+      <span class="btb-label" style="margin-left:6px">VAL</span>
+      <input type="number" id="val-min-f" placeholder="min" class="range-in" step="0.1">
+      <span class="btb-label">–</span>
+      <input type="number" id="val-max-f" placeholder="max" class="range-in" step="0.1">
+      <span class="btb-sep"></span>
+      <button class="batch-btn" id="target-visible-btn">★ Target visible</button>
+      <button class="batch-btn" id="clear-targets-btn">Clear targets</button>
+      <button class="batch-btn" id="clear-avoids-btn">Clear avoids</button>
+      <button class="batch-btn" id="clear-all-tags-btn">Clear all</button>
+      <button class="batch-btn" id="export-tags-btn">⬇ Export</button>
+      <label class="batch-btn" style="cursor:pointer">⬆ Import<input type="file" id="import-tags-in" accept=".json" style="display:none"></label>
+    </div>
+  </div>
+  <div id="board-table-wrap">
+    <table id="board-table">
+      <thead id="board-thead">
+        <tr>
+          <th class="bth bth-active" data-col="name">Player ↑</th>
+          <th class="bth" data-col="pos">Pos</th>
+          <th class="bth" data-col="team">Team</th>
+          <th class="bth" data-col="adp">ADP</th>
+          <th class="bth" data-col="val">VAL</th>
+          <th class="bth" data-col="bye">Bye</th>
+          <th class="bth" data-col="status">Status</th>
+          <th class="bth" data-col="idealRound">Ideal Rd</th>
+          <th class="bth" data-col="priority">Priority</th>
+        </tr>
+      </thead>
+      <tbody id="board-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="saved-view">
+  <div id="saved-content"></div>
+  <div id="saved-viz">
+    <div class="sv-viz-hdr">Network overlay</div>
+    <div id="saved-viz-inner"></div>
+  </div>
+</div>
+
+<div id="info-view">
+<div id="info-wrap">
+  <h1>Draft Strategy Reference Guide</h1>
+  <p class="info-subtitle">A complete guide to using the Fantasy Draft Network — concepts, measures, and customization options.</p>
+
+  <div class="info-toc">
+    <div class="info-toc-title">Contents</div>
+    <a href="#info-concept">The core concept</a>
+    <a href="#info-graph">Reading the graph</a>
+    <a href="#info-tabs">Tab-by-tab guide</a>
+    <a href="#info-measures">Measures explained</a>
+    <a href="#info-options">Customizable options</a>
+    <a href="#info-usecases">Use-case examples</a>
+  </div>
+
+  <!-- ── CORE CONCEPT ──────────────────────────────────────────────────────── -->
+  <h2 id="info-concept">The core concept</h2>
+  <p>Fantasy drafts are sequential decisions under uncertainty. At each pick you choose a position (RB, WR, TE, QB), which narrows what future picks are feasible. The Draft Network models all feasible drafting sequences as a <strong>directed acyclic graph (DAG)</strong> so you can see every valid path from your first pick to your last before the draft starts.</p>
+  <p>Each <strong>node</strong> is a roster state — a snapshot of how many players at each position you have drafted so far. Each <strong>edge</strong> is a single draft pick (one position increment). A path from top to bottom is one complete draft strategy: e.g., RB → WR → RB → TE → WR → ...</p>
+  <div class="info-callout">
+    <strong>Key insight:</strong> the graph is not about which players to pick — it is about which <em>sequences of positions</em> keep your options open. Once you add player value data, the graph tells you which sequence maximises value while surviving uncertainty.
+  </div>
+
+  <!-- ── READING THE GRAPH ─────────────────────────────────────────────────── -->
+  <h2 id="info-graph">Reading the graph</h2>
+  <h3>Nodes</h3>
+  <p>Each node is labelled with its roster state, e.g. <code>2-1-0-0</code> means 2 RBs, 1 WR, 0 TEs, 0 QBs. Nodes are arranged in rows by draft round.</p>
+  <ul>
+    <li><strong>Color</strong> — always encodes <em>global flexibility</em>: the number of complete draft strategies reachable from that node, normalized within each round. Darker blue = more paths = more long-term optionality.</li>
+    <li><strong>Size</strong> — encodes <em>local flexibility</em>: the number of distinct positions available at your very next pick. Larger = more immediate options.</li>
+    <li><strong>Value annotation</strong> — the small gray number above each node is the global flexibility score (0–1 scale within each round).</li>
+  </ul>
+  <h3>Edges</h3>
+  <p>Edges point downward (round R → round R+1). In draft mode, edges on the highlighted path are colored by the position drafted:</p>
+  <ul>
+    <li><span class="info-pos rb">Blue</span> = RB &nbsp;|&nbsp; <span class="info-pos wr">Amber</span> = WR &nbsp;|&nbsp; <span class="info-pos te">Teal</span> = TE &nbsp;|&nbsp; <span class="info-pos qb">Purple</span> = QB</li>
+  </ul>
+  <h3>Legend (bottom-left overlay)</h3>
+  <p>The legend inside the graph area shows both flexibility measures on a single axis. The gradient bar corresponds to node color (global flexibility); the two circles show node size (local flexibility). The arrow points right toward "more flexible."</p>
+
+  <!-- ── TABS ──────────────────────────────────────────────────────────────── -->
+  <h2 id="info-tabs">Tab-by-tab guide</h2>
+
+  <h3>Rule Initialization</h3>
+  <p>This is where you sculpt the graph. Rules define which roster states are valid — the DAG only includes nodes that pass all active rules. Draft settings are also configured here.</p>
+  <p><strong>Draft settings</strong> (top of the left panel):</p>
+  <ul>
+    <li><strong>Draft slot</strong> — your pick position within each round (1–12). Determines your exact pick numbers in a snake draft and which players are modeled as available at each edge.</li>
+    <li><strong>League size</strong> — number of teams (default 12). Controls the gap between your picks each round.</li>
+    <li><strong>Rounds</strong> — number of draft rounds to model. Each round adds one row of nodes and edges.</li>
+    <li><strong>BPA mode</strong> — Best Player Available strategy. <em>Strict</em>: only players whose ADP ≥ your pick number are available. <em>Range</em>: expands the window on both sides.</li>
+    <li><strong>Range inputs</strong> — when BPA is Range, <em>good luck −N</em> includes players who fell up to N picks before your slot; <em>+N reaches</em> includes players you'd take up to N picks early.</li>
+  </ul>
+  <p><strong>Rules</strong> control which roster states appear as nodes:</p>
+  <ul>
+    <li>Add rules with the rule builder (position, comparator, value, scope).</li>
+    <li>Toggle a rule active/inactive without deleting it — the graph updates immediately.</li>
+    <li>Nodes excluded manually via the "Exclude node" button are tracked separately from rules and persist across tab switches.</li>
+  </ul>
+
+  <h3>Draft Mode</h3>
+  <p>Simulate your draft pick by pick. Click a position button (RB / WR / TE / QB) each round to record your pick. The graph prunes in real time to show only forward-reachable nodes.</p>
+  <p><strong>Left sidebar — available players</strong>: players from the rankings CSV grouped by position and zone:</p>
+  <ul>
+    <li><span class="info-badge ok">drop</span> Player fell significantly — great value &nbsp;|&nbsp; <span class="info-badge warn">target</span> Near ADP &nbsp;|&nbsp; <span class="info-badge risk">reach</span> Taking them early</li>
+  </ul>
+  <p>Clicking a player records them as your explicit pick; their exact VAL replaces the BPA estimate. A <strong>★</strong> badge marks target-tagged players; <strong>✓</strong> marks explicitly selected players.</p>
+  <p><strong>Path Rankings panel</strong> shows two sections:</p>
+  <ul>
+    <li><strong>Top 5</strong> — five highest-value complete paths from your current position.</li>
+    <li><strong>By Next Pick</strong> — top 2 paths per position (RB/WR/TE/QB) for the next pick. Positions not reachable from your current node are shown muted. This answers "what's my best outcome if I draft RB right now?" — independently of whether that path makes the overall top 5.</li>
+  </ul>
+  <p>Clicking a path row highlights it on the graph and updates the lineup projection panel.</p>
+  <p><strong>Lineup projection panel</strong>: always visible. Confirmed past picks appear at full opacity; future projected picks appear muted and italic, filled via BPA along the selected path.</p>
+  <p><strong>Save</strong>: a Save button appears whenever a path is highlighted or at least one pick has been made. Saving captures the <em>full draft</em> — your actual picks to date plus the projected best remaining picks — so all rounds are represented regardless of how far into the draft you are. Up to 5 paths can be saved for comparison.</p>
+  <p><strong>Draft tracker</strong>: shows each confirmed pick with its VAL and the sacrifice relative to the best available path at that moment.</p>
+
+  <h3>Player Board</h3>
+  <p>Import and manage the player rankings CSV. All players are shown in a sortable, filterable table. Tag players as targets or avoids; set ideal rounds and priorities. These tags feed into path scoring and the lineup projection.</p>
+  <ul>
+    <li><strong>Target</strong> — player you specifically want. Set a priority (1–5) and ideal round. Shown first in the draft sidebar.</li>
+    <li><strong>Avoid</strong> — player you will not draft. Excluded from all analysis — path values, BPA pools, and NV% calculations all reflect their absence.</li>
+    <li><strong>Untagged</strong> — general pool; used as BPA fallback when no target is available at a position.</li>
+  </ul>
+  <p>Use the filters (position, status, ADP range, VAL range, name search) to quickly find and tag players. Batch operations let you tag entire ADP tiers at once.</p>
+
+  <h3>Saved Paths</h3>
+  <p>Compare up to 5 saved draft strategies side by side. The tab is split into two panels:</p>
+  <p><strong>Left — comparison table.</strong> Each saved path is a column. Rows are organized into three sections:</p>
+  <ul>
+    <li><strong>Header rows</strong> — total value (color-coded best to worst across paths) and the pick sequence shown in position colors.</li>
+    <li><strong>Local Flexibility per round</strong> — the out-degree (number of positions available next) at each inner round node. Color-coded by absolute cutoffs: <span style="color:#991b1b;font-weight:600">red = 1</span> (forced pick), <span style="color:#7c4f00;font-weight:600">yellow = 2</span>, <span style="color:#065f46;font-weight:600">green ≥ 3</span>. First and last rounds are excluded — they are the same for all paths and carry no comparative information.</li>
+    <li><strong>Global Flexibility per round</strong> — the normalized path-count score (0–1) at each inner round node, color-coded relative to other saved paths at the same round.</li>
+    <li><strong>Summary rows</strong> — weakest local, weakest global, avg local, avg global (all computed over inner rounds only), % non-viable picks, and median Δ. All color-coded: green = best, yellow = middle, red = worst across the saved paths.</li>
+  </ul>
+  <p>Each column header shows a colored dot and a checkbox. The dot identifies the path's color in the network overlay.</p>
+  <p><strong>Right — network overlay.</strong> The full DAG is rendered identically to the main graph view — same node sizes, same blue color scale, same labels. Check a path's checkbox to overlay it on the network: that path's edges become thick colored lines and its nodes gain a colored stroke ring. Multiple paths can be overlaid simultaneously to see where strategies diverge and where they share nodes.</p>
+  <div class="info-callout tip">
+    <strong>Tip:</strong> overlaying two paths that share early nodes but diverge in the middle rounds immediately shows you the decision point — the round where the strategies commit to different structures.
+  </div>
+
+  <!-- ── MEASURES ───────────────────────────────────────────────────────────── -->
+  <h2 id="info-measures">Measures explained</h2>
+
+  <div class="info-metric-row">
+    <div class="info-metric">
+      <div class="info-metric-name">Global Flexibility</div>
+      <div class="info-metric-desc">Number of complete draft strategies reachable from a node, normalized to 0–1 within each round (1.0 = round maximum). Encoded in node <strong>color</strong> — darker blue = more. Shown as the small gray number above each node.</div>
+    </div>
+    <div class="info-metric">
+      <div class="info-metric-name">Local Flexibility</div>
+      <div class="info-metric-desc">Number of distinct positions available at the very next pick from a node (out-degree: 1–4). Encoded in node <strong>size</strong>. In Saved Paths, colored by absolute cutoff: 1 = red, 2 = yellow, ≥3 = green.</div>
+    </div>
+  </div>
+  <div class="info-metric-row">
+    <div class="info-metric">
+      <div class="info-metric-name">Path Value / VORP</div>
+      <div class="info-metric-desc">Sum of VAL (value over replacement) for every pick along a path, using BPA to assign the best available player at each position and round. Higher = better projected roster quality.</div>
+    </div>
+    <div class="info-metric">
+      <div class="info-metric-name">Non-Viable % (NV%)</div>
+      <div class="info-metric-desc">Percentage of picks along a path where no player passes the BPA filter. Estimated via simulation across 1,000 scenarios. Lower is better — a path with NV% above ~20% has real holes in its projected lineup.</div>
+    </div>
+  </div>
+  <div class="info-metric-row">
+    <div class="info-metric">
+      <div class="info-metric-name">Sacrifice</div>
+      <div class="info-metric-desc">Value lost at each pick relative to the globally optimal path available at that moment. Shown in the draft tracker. A large sacrifice at round 2 means that pick was costly relative to the best alternative; small sacrifices across all rounds means you stayed close to optimal throughout.</div>
+    </div>
+    <div class="info-metric">
+      <div class="info-metric-name">Median Δ (med Δ)</div>
+      <div class="info-metric-desc">Median per-pick value delta from the simulation distribution — the typical outcome relative to the path's expected value. Distinguishes paths with consistent value from those with one great pick surrounded by weak ones.</div>
+    </div>
+  </div>
+
+  <h3>Weakest link</h3>
+  <p>The minimum local or global flexibility across all inner rounds of a path (first and last rounds excluded). A path whose weakest-link local flex is 1 has at least one round where you are forced into a single position — any disruption there (e.g., a player you expected going off the board early) leaves you with no alternative. A weakest-link local flex of 3+ means you always have meaningful choices.</p>
+
+  <h3>Good Luck vs. Reaches (Range mode)</h3>
+  <p>When BPA mode is set to Range, the availability window extends on both sides of your pick number:</p>
+  <ul>
+    <li><strong>Good luck −N</strong>: players whose ADP was up to N picks before your slot who are still available — they fell further than expected.</li>
+    <li><strong>+N reaches</strong>: players whose ADP is up to N picks after your slot — you are drafting them slightly early.</li>
+  </ul>
+  <p>Wider windows increase the number of viable picks at each edge, boosting path values and reducing NV%. Narrower windows model a draft where ADP is followed precisely.</p>
+
+  <!-- ── OPTIONS ────────────────────────────────────────────────────────────── -->
+  <h2 id="info-options">Customizable options and their impact</h2>
+
+  <h3>Draft Slot</h3>
+  <p>Your pick position within each round. In a 12-team snake draft, slot 1 picks 1st and 24th; slot 12 picks 12th and 13th.</p>
+  <p><strong>Impact:</strong> shifts which players are modeled as available at each edge. Early slots access top players first but wait longer between turns; late slots pick late in odd rounds but early in even rounds, creating different value clusters at each position.</p>
+
+  <h3>League Size</h3>
+  <p>Number of teams. Default 12. Determines the gap between your picks each round (gap ≈ 2 × league size − 1).</p>
+  <p><strong>Impact:</strong> larger leagues tighten availability windows and raise NV%. A 10-team league is more forgiving; a 14-team league compresses the viable player pool at each pick significantly.</p>
+
+  <h3>Rounds</h3>
+  <p>How many draft rounds to model. Each round adds one row of nodes and edges.</p>
+  <p><strong>Impact:</strong> 10–12 rounds capture the key strategic decisions for most formats. Adding rounds beyond that primarily refines late-round QB and TE strategy, at the cost of a larger graph.</p>
+
+  <h3>BPA Mode: Strict vs. Range</h3>
+  <p><strong>Strict</strong> — available only if ADP ≥ pick number. Conservative, models a draft where consensus is followed exactly.</p>
+  <p><strong>Range</strong> — window extends ±N picks. More realistic; most drafts deviate from consensus.</p>
+  <p><strong>Impact:</strong> Range mode produces higher path values and lower NV%. Use Strict for worst-case floor analysis.</p>
+
+  <h3>Good Luck / Reaches (Range inputs)</h3>
+  <p>Default: −3 / +8.</p>
+  <p><strong>Good luck (−N):</strong> captures "surprise falls." Rarely needs to exceed 5. A value of 0 means you only count on players to be there if they're already past their ADP.</p>
+  <p><strong>Reaches (+N):</strong> models willingness to draft early. A +8 reach means taking someone up to 8 picks before their consensus ADP. Lower values are more disciplined; higher values are appropriate if you're targeting specific players aggressively.</p>
+
+  <h3>Rules</h3>
+  <p>Rules prune the graph by removing roster states that violate constraints. Default rules encode common strategy:</p>
+  <ul>
+    <li>"No QB before round 8" — enforces the late-QB approach.</li>
+    <li>"At most 1 TE" — prevents double-TE builds.</li>
+    <li>"At least 3 RB by round 7" — enforces RB depth.</li>
+  </ul>
+  <p><strong>Impact:</strong> more restrictive rules shrink the graph and eliminate strategies. Relaxing rules (e.g., removing the QB cap) opens new paths — useful for exploring stud-QB or zero-RB approaches.</p>
+
+  <h3>Node Exclusion</h3>
+  <p>Select a node and click "Exclude node" to manually remove it. Cascade pruning removes any nodes that become unreachable or dead-ended as a result.</p>
+  <p><strong>Impact:</strong> useful when a roster construction is technically rule-legal but practically useless given your actual draft board. Manual exclusions stack on top of rules and persist across tab switches.</p>
+
+  <h3>Target / Avoid Tags (Player Board)</h3>
+  <p>Targets boost path scoring for sequences that can acquire those players; avoids remove players from all BPA pools, tightening positional scarcity and raising NV% at those positions.</p>
+  <p><strong>Impact:</strong> avoiding a top-5 RB shifts path rankings — any path relying on that player as BPA fallback loses value. Targets surface first in the draft sidebar and are prioritized in lineup projections.</p>
+
+  <!-- ── USE CASES ──────────────────────────────────────────────────────────── -->
+  <h2 id="info-usecases">Use-case examples</h2>
+
+  <h3>Example 1: Late-slot zero-RB strategy</h3>
+  <p><strong>Setup:</strong> draft slot 10, league size 12, 10 rounds. Add a rule: "RB: at most 1 by round 3." Observe the resulting graph.</p>
+  <p><strong>What to look for:</strong> the rule collapses RB-heavy early nodes. If the surviving WR-first paths show high global flexibility and strong path values, the zero-RB approach is structurally sound for your slot. If those paths have elevated NV% at RB in rounds 4–6, the strategy depends on late-round variance — the market needs to deliver usable RBs late.</p>
+
+  <h3>Example 2: Evaluating a reach decision mid-draft</h3>
+  <p><strong>Setup:</strong> in Draft Mode, you have taken RB–WR through round 2. You are tempted to take TE in round 3, but consensus says wait.</p>
+  <p><strong>What to look for:</strong> in the "By Next Pick" panel, select the TE row and note its top paths. Compare path value and global flexibility against the RB and WR alternatives. If the TE paths offer similar value but lower global flexibility, the reach costs optionality without a value payoff. If both match, the reach is justified — save both options to the Saved Paths tab to compare side by side.</p>
+
+  <h3>Example 3: Comparing strategies in Saved Paths</h3>
+  <p><strong>Setup:</strong> before the draft, save the top path from two different rule sets — one enforcing 3-RB depth, one with no RB minimum. Switch to the Saved Paths tab.</p>
+  <p><strong>What to look for:</strong> in the Local Flexibility section, scan for red cells (local flex = 1). Any red cell means that path is forced into a single position at that round — a bottleneck. Check the network overlay by toggling both paths' checkboxes: nodes shared by both paths are points of convergence where the strategies agree; the first divergence point is where the strategic difference actually kicks in. A path with all-green local flex rows is more resilient to surprises than one with red cells, even if their total values are similar.</p>
+
+  <h3>Example 4: Quantifying sacrifice mid-draft</h3>
+  <p><strong>Setup:</strong> in Draft Mode after 4–5 picks, open the Draft Tracker panel.</p>
+  <p><strong>What to look for:</strong> rounds with large sacrifice values are where your pick deviated most from the optimal path available at that moment. A large round-2 sacrifice means that pick was costly; small sacrifices throughout means you stayed close to optimal. At any point, hit Save to snapshot the full remaining projection — the saved path captures all rounds (including projected future picks), so you can compare the actual draft trajectory against pre-draft plans in the Saved Paths tab.</p>
+
+  <div class="info-callout tip">
+    <strong>Tip:</strong> check both paths' overlays in Saved Paths to find where they diverge on the network. The first node where the colored lines split apart is the strategic decision point — that's the round and roster state where your two plans commit to different trajectories.
+  </div>
+  <div class="info-callout warn">
+    <strong>Note on player data:</strong> path values depend on the rankings CSV loaded in the Player Board. Re-import updated rankings after injury news or ADP shifts; target and avoid tags persist across re-imports.
+  </div>
+</div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const POS = ['RB','WR','TE','QB'];
+const UNITS = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]];
+// Position colors used for both node outlines (draft path) and edge arrows
+const PICK_COLORS  = ['#1D4ED8', '#D97706', '#0D9488', '#9333EA'];
+//                    RB-blue    WR-gold    TE-teal    QB-purple
+const POS_MARKERS  = ['arr-rb',  'arr-wr',  'arr-te',  'arr-qb'];
+const MAX_PER_POS = [8, 8, 2, 2];
+const R_NODE = 22;
+const VW = 780;
+const PAD = { top: 46, bottom: 32, left: 54, right: 34 };
+const GW = VW - PAD.left - PAD.right; // = 692, fixed
+
+// ── Mutable round / graph state ───────────────────────────────────────────────
+
+let maxRound = 10;   // user-set number of rounds
+let gNRounds  = 10;  // actual round count in current graph
+
+function getVH() { return 78 + 75 * Math.max(1, maxRound - 1); }
+function getGH() { return getVH() - PAD.top - PAD.bottom; }
+
+// Hard-coded 25-node, 7-round seed
+const SEED_ROUNDS = [
+  [[1,0,0,0],[0,1,0,0]],
+  [[2,0,0,0],[1,1,0,0]],
+  [[2,0,1,0],[2,1,0,0],[1,1,1,0],[1,2,0,0]],
+  [[2,1,1,0],[3,1,0,0],[2,2,0,0],[1,2,1,0],[1,3,0,0]],
+  [[3,1,1,0],[2,2,1,0],[3,2,0,0],[2,3,0,0]],
+  [[3,2,1,0],[4,2,0,0],[3,3,0,0],[2,3,1,0],[2,4,0,0]],
+  [[4,3,0,0],[3,3,1,0],[3,4,0,0]],
+];
+
+// ── Metrics ───────────────────────────────────────────────────────────────────
+
+const METRICS = [
+  { key: 'pathCount',  label: 'Path count',    fmt: d3.format('d'),   desc: 'Source-to-terminal paths through this node', hidden: true },
+  { key: 'outDeg',     label: 'Out-degree',     fmt: d3.format('d'),   desc: 'Next-round states reachable' },
+  { key: 'inDeg',      label: 'In-degree',      fmt: d3.format('d'),   desc: 'Previous-round parent states', hidden: true },
+  { key: 'pathsOut',   label: 'Paths to end',   fmt: d3.format('.2f'), desc: 'Forward paths to any terminal, normalized within round (1.0 = round max)' },
+  { key: 'termReach',  label: 'Terminal reach', fmt: d3.format('d'),   desc: 'Distinct terminal states reachable', hidden: true },
+  { key: 'bottleneck', label: 'Bottleneck',     fmt: d3.format('.2f'), desc: 'Path count normalized within round (1.0 = round max)', hidden: true },
+  { key: 'btwn',       label: 'Betweenness',    fmt: d3.format('.1f'), desc: 'Sum of fraction of all-pair directed paths through this node', hidden: true },
+];
+const curKey = 'pathsOut';
+
+// ── Player rankings (embedded CSV) ────────────────────────────────────────────
+
+const RANKINGS_CSV = `Player,Position,ADP_Round,ADP_Pick,ADP,VAL,Bye,Team
+Jahmyr Gibbs,RB,1,1,1,9.3,6,DET
+Ja'Marr Chase,WR,1,2,2,9.2,6,CIN
+Puka Nacua,WR,1,3,3,8.7,11,LAR
+Bijan Robinson,RB,1,4,4,8.5,11,ATL
+Jaxon Smith-Njigba,WR,1,5,5,8.1,11,SEA
+Amon-Ra St. Brown,WR,1,6,6,7.8,6,DET
+Jonathan Taylor,RB,1,7,7,6.9,13,IND
+Christian McCaffrey,RB,1,8,8,6.7,8,SF
+Chase Brown,RB,1,9,9,6,6,CIN
+CeeDee Lamb,WR,1,10,10,5.9,14,DAL
+Justin Jefferson,WR,2,1,11,5.9,6,MIN
+A.J. Brown,WR,2,2,12,5.5,11,NE
+De'Von Achane,RB,2,3,13,5.3,6,MIA
+Saquon Barkley,RB,2,4,14,5.3,10,PHI
+James Cook III,RB,2,5,15,5.3,7,BUF
+Drake London,WR,2,6,16,5.2,11,ATL
+Chris Olave,WR,2,7,17,4.9,8,NO
+Nico Collins,WR,2,8,18,4.8,8,HOU
+Kenneth Walker III,RB,2,9,19,4.7,5,KC
+George Pickens,WR,2,10,20,4.6,14,DAL
+Malik Nabers,WR,3,1,21,4.6,8,NYG
+Omarion Hampton,RB,3,2,22,4.5,7,LAC
+DeVonta Smith,WR,3,3,23,4.3,10,PHI
+Ashton Jeanty,RB,3,4,24,4.1,13,LV
+Brock Bowers,TE,3,5,25,3.7,13,LV
+Zay Flowers,WR,3,6,26,3.7,13,BAL
+Rashee Rice,WR,3,7,27,3.6,5,KC
+Breece Hall,RB,3,8,28,3.5,13,NYJ
+Jeremiyah Love,RB,3,9,29,3.5,14,ARI
+Jaylen Waddle,WR,3,10,30,3.5,10,DEN
+Garrett Wilson,WR,4,1,31,3.4,13,NYJ
+Kyren Williams,RB,4,2,32,3.4,11,LAR
+Javonte Williams,RB,4,3,33,3.3,14,DAL
+Tee Higgins,WR,4,4,34,3.2,6,CIN
+Derrick Henry,RB,4,5,35,3.1,13,BAL
+Trey McBride,TE,4,6,36,3.1,14,ARI
+Travis Etienne Jr.,RB,4,7,37,3.1,8,NO
+Ladd McConkey,WR,4,8,38,3.1,7,LAC
+Tetairoa McMillan,WR,4,9,39,2.8,5,CAR
+D'Andre Swift,RB,4,10,40,2.7,10,CHI
+Bucky Irving,RB,5,1,41,2.6,10,TB
+Luther Burden III,WR,5,2,42,2.5,10,CHI
+Emeka Egbuka,WR,5,3,43,2.3,10,TB
+Cam Skattebo,RB,5,4,44,2.2,8,NYG
+David Montgomery,RB,5,5,45,2,8,HOU
+Terry McLaurin,WR,5,6,46,1.9,7,WAS
+Josh Allen,QB,5,7,47,1.9,7,BUF
+Colston Loveland,TE,5,8,48,1.8,10,CHI
+DJ Moore,WR,5,9,49,1.8,7,BUF
+Davante Adams,WR,5,10,50,1.8,11,LAR
+Lamar Jackson,QB,6,1,51,1.7,13,BAL
+Quinshon Judkins,RB,6,2,52,1.7,11,CLE
+Jameson Williams,WR,6,3,53,1.6,6,DET
+Drake Maye,QB,6,4,54,1.6,11,NE
+Tyler Warren,TE,6,5,55,1.5,13,IND
+Christian Watson,WR,6,6,56,1.4,11,GB
+Rome Odunze,WR,6,7,57,1.3,10,CHI
+Parker Washington,WR,6,8,58,1.2,7,JAC
+Carnell Tate,WR,6,9,59,1.2,9,TEN
+Marvin Harrison Jr.,WR,6,10,60,1.1,14,ARI
+Harold Fannin Jr.,TE,7,1,61,1.1,11,CLE
+Bhayshul Tuten,RB,7,2,62,1.1,7,JAC
+Mike Evans,WR,7,3,63,1.1,8,SF
+Kyle Pitts Sr.,TE,7,4,64,1.1,11,ATL
+Joe Burrow,QB,7,5,65,1,6,CIN
+Tucker Kraft,TE,7,6,66,1,11,GB
+Jalen Hurts,QB,7,7,67,0.9,10,PHI
+Rhamondre Stevenson,RB,7,8,68,0.9,11,NE
+Jaylen Warren,RB,7,9,69,0.8,9,PIT
+Jadarian Price,RB,7,10,70,0.8,11,SEA
+Sam LaPorta,TE,8,1,71,0.8,6,DET
+TreVeyon Henderson,RB,8,2,72,0.7,11,NE
+Jayden Daniels,QB,8,3,73,0.7,7,WAS
+Chris Godwin Jr.,WR,8,4,74,0.7,10,TB
+Brian Thomas Jr.,WR,8,5,75,0.6,7,JAC
+Travis Kelce,TE,8,6,76,0.6,5,KC
+Caleb Williams,QB,8,7,77,0.6,10,CHI
+DK Metcalf,WR,8,8,78,0.6,9,PIT
+Michael Pittman Jr.,WR,8,9,79,0.5,9,PIT
+Justin Herbert,QB,8,10,80,0.5,7,LAC
+George Kittle,TE,9,1,81,0.5,8,SF
+Tony Pollard,RB,9,2,82,0.5,9,TEN
+Wan'Dale Robinson,WR,9,3,83,0.4,9,TEN
+Josh Downs,WR,9,4,84,0.4,13,IND
+Trevor Lawrence,QB,9,5,85,0.2,7,JAC
+Rico Dowdle,RB,9,6,86,0.2,9,PIT
+Stefon Diggs,WR,9,7,87,0.2,7,WAS
+Jonathon Brooks,RB,9,8,88,0.2,5,CAR
+Michael Wilson,WR,9,9,89,0.1,14,ARI
+Courtland Sutton,WR,9,10,90,0.1,10,DEN
+Dak Prescott,QB,10,1,91,0.1,14,DAL
+Brock Purdy,QB,10,2,92,0.1,8,SF
+Bo Nix,QB,10,3,93,0,10,DEN
+Dalton Kincaid,TE,10,4,94,0,7,BUF
+Jaxson Dart,QB,10,5,95,-0.1,8,NYG
+Quentin Johnston,WR,10,6,96,-0.1,7,LAC
+Patrick Mahomes II,QB,10,7,97,-0.1,5,KC
+Isaiah Likely,TE,10,8,98,-0.2,8,NYG
+Jared Goff,QB,10,9,99,-0.2,6,DET
+Jayden Reed,WR,10,10,100,-0.2,11,GB
+KC Concepcion,WR,11,1,101,-0.3,11,CLE
+Khalil Shakir,WR,11,2,102,-0.4,7,BUF
+RJ Harvey,RB,11,3,103,-0.4,10,DEN
+Jakobi Meyers,WR,11,4,104,-0.4,7,JAC
+Dallas Goedert,TE,11,5,105,-0.4,10,PHI
+Alec Pierce,WR,11,6,106,-0.4,13,IND
+Makai Lemon,WR,11,7,107,-0.4,10,PHI
+Jordan Addison,WR,11,8,108,-0.5,6,MIN
+Matthew Stafford,QB,11,9,109,-0.5,11,LAR
+Jake Ferguson,TE,11,10,110,-0.5,14,DAL
+Chuba Hubbard,RB,12,1,111,-0.6,5,CAR
+MarShawn Lloyd,RB,12,2,112,-0.6,11,GB
+Jalen Coker,WR,12,3,113,-0.6,5,CAR
+J.K. Dobbins,RB,12,4,114,-0.6,10,DEN
+Kenny Gainwell,RB,12,5,115,-0.7,10,TB
+Matthew Golden,WR,12,7,116,-0.7,11,GB
+De'Zhaun Stribling,WR,12,8,117,-0.7,8,SF
+Romeo Doubs,WR,12,9,118,-0.7,11,NE
+Kyler Murray,QB,12,10,119,-0.8,6,MIN
+Jordyn Tyson,WR,13,1,120,-0.9,8,NO
+Xavier Worthy,WR,13,2,121,-0.9,5,KC
+Deebo Samuel Sr.,WR,13,3,122,-0.9,8,SF
+Aaron Jones Sr.,RB,13,5,123,-1,6,MIN
+Denzel Boston,WR,13,6,124,-1,11,CLE
+Rachaad White,RB,13,7,125,-1,7,WAS
+Blake Corum,RB,13,8,126,-1,11,LAR
+Jordan Love,QB,13,9,127,-1.2,11,GB
+Baker Mayfield,QB,14,1,128,-1.2,10,TB
+Tyler Shough,QB,14,2,129,-1.3,8,NO
+Tyler Allgeier,RB,14,3,130,-1.3,14,ARI
+Jerry Jeudy,WR,14,4,131,-1.3,11,CLE
+Kyle Monangai,RB,14,5,132,-1.3,10,CHI
+Rashid Shaheed,WR,14,6,133,-1.3,11,SEA
+Woody Marks,RB,14,7,134,-1.4,8,HOU
+Jordan Mason,RB,14,8,135,-1.4,6,MIN
+Tre Tucker,WR,14,9,136,-1.4,13,LV
+Jacory Croskey-Merritt,RB,15,6,137,-1.5,7,WAS
+Malik Willis,QB,15,9,138,-1.6,6,MIA
+Chris Rodriguez Jr.,RB,16,6,139,-1.8,7,JAC
+Sam Darnold,QB,16,9,140,-2,11,SEA
+Tyjae Spears,RB,16,10,141,-2.1,9,TEN
+C.J. Stroud,QB,17,8,142,-2.4,8,HOU
+Jonah Coleman,RB,18,4,143,-2.6,10,DEN
+Dylan Sampson,RB,19,4,144,-2.8,11,CLE
+Keaton Mitchell,RB,20,1,145,-3.1,7,LAC
+Zach Charbonnet,RB,20,3,146,-3.3,11,SEA
+Alvin Kamara,RB,20,4,147,-3.3,8,NO
+Mike Washington Jr.,RB,20,5,148,-3.3,13,LV`;
+
+let playerData    = []; // { name, pos, posStr, adpRound, adp, val, bye, team }
+let playerTags    = {}; // keyed by adp (integer) → { status:'target'|'avoid'|'', priority, idealRound }
+let draftSlot     = 5;
+let leagueSize    = 10;
+let bpaMode       = 'strict'; // 'strict' | 'range'
+let rangeBefore   = 3;        // picks before: ADP >= pick - rangeBefore
+let rangeAfter    = 8;        // picks after:  ADP <= pick + rangeAfter
+let rankHighlight = null;     // { pathIdx, nodeSet, edgeSet }
+let activeTab     = 'init';
+let boardSort     = { col: 'adp', dir: 1 };
+let boardFilters  = { pos: new Set(['RB','WR','TE','QB']), status: 'all',
+                      adpMin:'', adpMax:'', valMin:'', valMax:'', search:'' };
+
+// ── Mutable graph state ───────────────────────────────────────────────────────
+
+let gNodes = [], gEdges = [], gCh = [], gPa = [], gM = {};
+let gNgs = null, gEdgeSels = null;
+let usingHandcodedSeed = false;
+let excluded = new Set(); // manually excluded node labels (sticky across rebuilds)
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
+
+let rules = [];
+let nextRuleId = 0;
+
+function rulePred(type, pos, count, round) {
+  switch (type) {
+    case 'no_pos_before': return (roster, r) => r >= round || roster[pos] === 0;
+    case 'max_count':     return (roster)     => roster[pos] <= count;
+    case 'min_by_round':  return (roster, r)  => r < round  || roster[pos] >= count;
+    case 'max_by_round':  return (roster, r)  => r > round  || roster[pos] <= count;
+    default: return () => true;
+  }
+}
+
+function ruleLabel(type, pos, count, round) {
+  const p = POS[pos];
+  switch (type) {
+    case 'no_pos_before': return `No ${p} before round ${round}`;
+    case 'max_count':     return count === 0 ? `No ${p}` : `At most ${count} ${p}`;
+    case 'min_by_round':  return `At least ${count} ${p} by R${round}`;
+    case 'max_by_round':  return `At most ${count} ${p} by R${round}`;
+    default: return '?';
+  }
+}
+
+function makeRule(type, pos, count, round) {
+  return {
+    id: nextRuleId++, type, pos, count, round,
+    active: true,
+    pred: rulePred(type, pos, count, round),
+    label: ruleLabel(type, pos, count, round),
+  };
+}
+
+function defaultRules() {
+  nextRuleId = 0;
+  const R = maxRound;
+  return [
+    makeRule('no_pos_before', 2, null, 3),       // No TE before round 3
+    makeRule('no_pos_before', 3, null, 7),       // No QB before round 7
+    makeRule('max_count',     2, 1,    null),    // At most 1 TE
+    makeRule('max_count',     3, 1,    null),    // At most 1 QB
+    makeRule('min_by_round',  2, 1,    R),       // At least 1 TE by final round
+    makeRule('min_by_round',  3, 1,    R),       // At least 1 QB by final round
+    makeRule('min_by_round',  0, 1,    4),       // At least 1 RB by round 4
+    makeRule('min_by_round',  1, 1,    4),       // At least 1 WR by round 4
+    makeRule('min_by_round',  0, 3,    7),       // At least 3 RB by round 7
+    makeRule('min_by_round',  1, 3,    7),       // At least 3 WR by round 7
+    makeRule('max_by_round',  0, 3,    6),       // At most 3 RB by round 6
+    makeRule('max_by_round',  0, 4,    8),       // At most 4 RB by round 8
+  ];
+}
+
+// ── Network building ──────────────────────────────────────────────────────────
+
+function buildNetwork(ruleSet) {
+  const preds = ruleSet.filter(r => r.active).map(r => r.pred);
+  let prevStates = [[0,0,0,0]];
+  const allByRound = [];
+  for (let round = 1; round <= maxRound; round++) {
+    const seen = new Map();
+    for (const state of prevStates) {
+      for (let pos = 0; pos < 4; pos++) {
+        if (state[pos] >= MAX_PER_POS[pos]) continue;
+        const next = state.slice(); next[pos]++;
+        if (!preds.every(p => p(next, round))) continue;
+        const key = next.join(',');
+        if (!seen.has(key)) seen.set(key, next);
+      }
+    }
+    allByRound.push([...seen.values()]);
+    prevStates = allByRound[allByRound.length - 1];
+    if (!prevStates.length) break;
+  }
+  return assembleGraph(allByRound);
+}
+
+function buildFromSeed() {
+  return assembleGraph(SEED_ROUNDS);
+}
+
+function assembleGraph(roundArrays) {
+  const nR = roundArrays.length;
+  const raw = [];
+  roundArrays.forEach((rnd, ri) => {
+    rnd.forEach(roster => {
+      raw.push({ roster: roster.slice(), label: roster.join(''), round: ri + 1, index: raw.length });
+    });
+  });
+  const N = raw.length;
+  if (N === 0) return { nodes: [], edges: [], ch: [], pa: [], nRounds: nR };
+
+  const rawEdges = [];
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < N; j++) {
+      if (raw[j].round !== raw[i].round + 1) continue;
+      const diff = raw[j].roster.map((v, k) => v - raw[i].roster[k]);
+      if (UNITS.some(u => u.every((v, k) => v === diff[k]))) rawEdges.push({ source: i, target: j });
+    }
+  }
+
+  const rawCh = Array.from({length: N}, () => []);
+  const rawPa = Array.from({length: N}, () => []);
+  rawEdges.forEach(({ source: s, target: t }) => { rawCh[s].push(t); rawPa[t].push(s); });
+
+  // Backward pass: keep nodes reachable from terminals
+  const keep = new Set(raw.filter(n => n.round === nR).map(n => n.index));
+  const q = [...keep];
+  while (q.length) {
+    const v = q.shift();
+    rawPa[v].forEach(p => { if (!keep.has(p)) { keep.add(p); q.push(p); } });
+  }
+  if (keep.size === 0) return { nodes: [], edges: [], ch: [], pa: [], nRounds: nR };
+
+  const old2new = new Map();
+  const nodes = [];
+  raw.forEach((n, i) => {
+    if (!keep.has(i)) return;
+    old2new.set(i, nodes.length);
+    nodes.push({ ...n, index: nodes.length });
+  });
+  const nN = nodes.length;
+  const edges = rawEdges
+    .filter(e => keep.has(e.source) && keep.has(e.target))
+    .map(e => ({ source: old2new.get(e.source), target: old2new.get(e.target) }));
+  const ch = Array.from({length: nN}, () => []);
+  const pa = Array.from({length: nN}, () => []);
+  edges.forEach(({ source: s, target: t }) => { ch[s].push(t); pa[t].push(s); });
+
+  return { nodes, edges, ch, pa, nRounds: nR };
+}
+
+function computeMetricsFor(nodes, ch, pa, nRounds) {
+  const N = nodes.length;
+  if (N === 0) return { outDeg:[], inDeg:[], pathCount:[], pathsOut:[], termReach:[], bottleneck:[], btwn:[] };
+
+  const outDeg = nodes.map((_, i) => ch[i].length);
+  const inDeg  = nodes.map((_, i) => pa[i].length);
+
+  const pIn = new Array(N).fill(0);
+  nodes.forEach((nd, i) => {
+    if (nd.round === 1) pIn[i] = 1;
+    else pa[i].forEach(p => { pIn[i] += pIn[p]; });
+  });
+  const pOut = new Array(N).fill(0);
+  for (let i = N - 1; i >= 0; i--) {
+    if (nodes[i].round === nRounds) pOut[i] = 1;
+    else ch[i].forEach(c => { pOut[i] += pOut[c]; });
+  }
+  const pathCount = nodes.map((_, i) => pIn[i] * pOut[i]);
+
+  const tSets = nodes.map(() => new Set());
+  for (let i = N - 1; i >= 0; i--) {
+    if (nodes[i].round === nRounds) tSets[i].add(i);
+    else ch[i].forEach(c => tSets[c].forEach(t => tSets[i].add(t)));
+  }
+  const termReach = nodes.map((_, i) => tSets[i].size);
+
+  const pathsOut = new Array(N).fill(0);
+  const bottleneck = new Array(N).fill(0);
+  for (let r = 1; r <= nRounds; r++) {
+    const grp = nodes.filter(n => n.round === r).map(n => n.index);
+    if (!grp.length) continue;
+    const mxPO = Math.max(...grp.map(i => pOut[i]));
+    grp.forEach(i => { pathsOut[i] = mxPO > 0 ? pOut[i] / mxPO : 0; });
+    const mx = Math.max(...grp.map(i => pathCount[i]));
+    grp.forEach(i => { bottleneck[i] = mx > 0 ? pathCount[i] / mx : 0; });
+  }
+
+  const pm = nodes.map((srcNd, s) => {
+    const row = new Array(N).fill(0); row[s] = 1;
+    nodes.forEach((nd, i) => {
+      if (nd.round <= srcNd.round) return;
+      pa[i].forEach(p => { row[i] += row[p]; });
+    });
+    return row;
+  });
+  const btwn = new Array(N).fill(0);
+  for (let s = 0; s < N; s++) {
+    for (let t = 0; t < N; t++) {
+      if (t === s || nodes[t].round <= nodes[s].round || !pm[s][t]) continue;
+      for (let v = 0; v < N; v++) {
+        if (v === s || v === t) continue;
+        if (nodes[v].round <= nodes[s].round || nodes[v].round >= nodes[t].round) continue;
+        btwn[v] += (pm[s][v] * pm[v][t]) / pm[s][t];
+      }
+    }
+  }
+
+  return { outDeg, inDeg, pathCount, pathsOut, termReach, bottleneck, btwn };
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+function labelHash(label, seed) {
+  let h = seed >>> 0;
+  for (let i = 0; i < label.length; i++) h = Math.imul((h ^ label.charCodeAt(i)), 0x01000193) >>> 0;
+  return h / 0xffffffff;
+}
+
+function layoutGraph(nodes, nRounds) {
+  const GH = getGH();
+  const byRound = Array.from({length: nRounds}, (_, i) => nodes.filter(n => n.round === i + 1));
+  const maxN = Math.max(1, ...byRound.map(r => r.length));
+  // Cap STEP so small rounds don't spread too wide; large rounds use natural spacing
+  const STEP = maxN > 1 ? Math.min(GW / (maxN - 1), 115) : GW;
+  const CX = PAD.left + GW / 2;
+  // Jitter scales to available space; eliminated when nodes are tightly packed
+  const maxJitter = Math.max(0, Math.min(10, (STEP - 2 * R_NODE - 8) / 2));
+
+  byRound.forEach((rnd, ri) => {
+    const y = PAD.top + ri * GH / Math.max(1, nRounds - 1);
+    rnd.forEach((nd, idx) => {
+      const jx = maxJitter > 0 ? (labelHash(nd.label, 0x811c9dc5) - 0.5) * 2 * maxJitter : 0;
+      nd.x = CX + (idx - (rnd.length - 1) / 2) * STEP + jx;
+      nd.y = y;
+    });
+  });
+}
+
+function applyGraph({ nodes, edges, ch, pa, nRounds }) {
+  selectedNodes.clear(); hov = null;
+  if (draftMode) { draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null; }
+  gNRounds = nRounds || maxRound;
+  gNodes = nodes; gEdges = edges; gCh = ch; gPa = pa;
+  layoutGraph(gNodes, gNRounds);
+  gM = computeMetricsFor(gNodes, gCh, gPa, gNRounds);
+  rankHighlight = null;
+  rebuildSVG();
+  updateGraphStatus();
+  renderPanel(null);
+  renderPathRankings();
+}
+
+// ── Manual exclusions ─────────────────────────────────────────────────────────
+
+function applyExclusions({ nodes, edges, ch, pa, nRounds }) {
+  if (excluded.size === 0) return { nodes, edges, ch, pa, nRounds };
+  const roundArrays = [];
+  for (let r = 1; r <= nRounds; r++) {
+    roundArrays.push(nodes.filter(n => n.round === r && !excluded.has(n.label)).map(n => n.roster.slice()));
+  }
+  return assembleGraph(roundArrays);
+}
+
+function rebuild() {
+  const base = usingHandcodedSeed ? buildFromSeed() : buildNetwork(rules);
+  applyGraph(applyExclusions(base));
+}
+
+function excludeNode(label) {
+  excluded.add(label);
+  rebuild();
+  renderExcluded();
+}
+
+function restoreNode(label) {
+  excluded.delete(label);
+  rebuild();
+  renderExcluded();
+}
+
+function renderExcluded() {
+  const section = document.getElementById('excl-section');
+  const list    = document.getElementById('excl-list');
+  if (!excluded.size) { section.style.display = 'none'; return; }
+  section.style.display = '';
+  list.innerHTML = [...excluded].map(lbl => `
+    <div class="excl-row">
+      <span class="excl-lbl">${lbl}</span>
+      <button class="excl-restore" data-lbl="${lbl}" title="Restore ${lbl}">↩</button>
+    </div>`).join('');
+  list.querySelectorAll('.excl-restore').forEach(btn => {
+    btn.onclick = () => restoreNode(btn.dataset.lbl);
+  });
+}
+
+// ── SVG setup ─────────────────────────────────────────────────────────────────
+
+const svg = d3.select('#graph').attr('preserveAspectRatio', 'xMidYMid meet');
+
+// Arrow markers — one per highlight state + one per position for colored outgoing edges
+const defs = svg.append('defs');
+[
+  ['arr-gray','#aaa'], ['arr-blue','#185FA5'], ['arr-orange','#c95f0a'],
+  ['arr-rb','#1D4ED8'], ['arr-wr','#D97706'], ['arr-te','#0D9488'], ['arr-qb','#9333EA'],
+  ['arr-green','#15803D']
+].forEach(([id, fill]) => {
+  defs.append('marker')
+    .attr('id', id)
+    .attr('viewBox', '0 0 6 4')
+    .attr('refX', 6).attr('refY', 2)
+    .attr('markerWidth', 6).attr('markerHeight', 4)
+    .attr('markerUnits', 'userSpaceOnUse')
+    .attr('orient', 'auto')
+    .append('path').attr('d', 'M0,0 L6,2 L0,4 Z').attr('fill', fill);
+});
+
+svg.append('text').attr('class','pos-legend').attr('x', PAD.left).attr('y', 14)
+  .text('Label: [RB][WR][TE][QB]  ·  e.g. "2110" = RB×2 WR×1 TE×1 QB×0');
+const roundLabelLayer = svg.append('g');
+const edgeLayer = svg.append('g');
+const nodeLayer  = svg.append('g');
+const emptyMsg   = svg.append('text').attr('class','empty-msg').text('');
+
+function rebuildSVG() {
+  const VH = getVH(), GH = getGH();
+  svg.attr('viewBox', `0 0 ${VW} ${VH}`);
+  emptyMsg.attr('x', VW / 2).attr('y', VH / 2);
+
+  // Regenerate round labels for current maxRound
+  roundLabelLayer.selectAll('*').remove();
+  for (let r = 1; r <= maxRound; r++) {
+    roundLabelLayer.append('text').attr('class','rlabel')
+      .attr('x', 4)
+      .attr('y', PAD.top + (r - 1) * GH / Math.max(1, maxRound - 1) + 4)
+      .text(`R${r}`);
+  }
+
+  edgeLayer.selectAll('*').remove();
+  nodeLayer.selectAll('*').remove();
+
+  if (gNodes.length === 0) {
+    emptyMsg.text('No valid nodes — rules are too restrictive');
+    gEdgeSels = null; gNgs = null;
+    renderAll(); return;
+  }
+  emptyMsg.text('');
+
+  // Edges run from source circle boundary to target circle boundary so arrows land cleanly
+  gEdgeSels = edgeLayer.selectAll('.edge')
+    .data(gEdges).join('line').attr('class','edge');
+  // Tag each edge with the position it represents (roster diff source→target)
+  gEdges.forEach(e => {
+    e.pos = gNodes[e.target].roster.findIndex((v, k) => v !== gNodes[e.source].roster[k]);
+  });
+
+  gNgs = nodeLayer.selectAll('.ng')
+    .data(gNodes).join('g').attr('class','ng')
+    .attr('transform', d => `translate(${d.x},${d.y})`);
+
+  gNgs.append('circle').attr('class','ncirc');
+  gNgs.append('text').attr('class','nlabel').text(d => d.label);
+  gNgs.append('text').attr('class','nval').attr('x', 0);
+
+  attachNodeHandlers();
+  renderAll();
+}
+
+// ── Color & legend ────────────────────────────────────────────────────────────
+
+const BLUE_RAMP = d3.piecewise(d3.interpolateRgb, ['#E6F1FB','#85B7EB','#378ADD','#185FA5','#042C53']);
+
+function makeScale(key) {
+  if (!gM[key] || !gM[key].length) return () => '#ccc';
+  let [lo, hi] = d3.extent(gM[key]);
+  if (lo === hi) lo = hi - 1;
+  return d3.scaleSequential(BLUE_RAMP).domain([lo, hi]);
+}
+
+function labelColor(hexFill) {
+  const { r, g, b } = d3.color(hexFill).rgb();
+  const lin = v => { v /= 255; return v <= 0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055, 2.4); };
+  return 0.2126*lin(r) + 0.7152*lin(g) + 0.0722*lin(b) > 0.179 ? '#111' : '#fff';
+}
+
+function drawLegend(key) {
+  const cvs = document.getElementById('gl-bar');
+  if (!cvs) return;
+  if (!gM[key] || !gM[key].length) return;
+  const [lo, hi] = d3.extent(gM[key]);
+  const cs = makeScale(key);
+  const ctx = cvs.getContext('2d');
+  const w = cvs.width, h = cvs.height;
+  for (let x = 0; x < w; x++) {
+    ctx.fillStyle = cs(lo + (x / w) * (hi - lo));
+    ctx.fillRect(x, 0, 1, h);
+  }
+}
+
+// ── Draft state ───────────────────────────────────────────────────────────────
+
+let draftMode = false;
+let draftPath = [], currentNode = null, draftPickVals = [], draftPickedPlayers = [];
+let draftBestRemaining = [], initialBestVal = null;
+let lineupRerollCount = 0;
+let savedPaths = [];
+let savedPathVisible = new Set();
+const SAVED_PATH_COLORS = ['#e63946','#2196F3','#4CAF50','#ff9800','#9c27b0','#00bcd4','#c77dff','#ff5722','#607d8b','#c2185b'];
+
+function isDraftComplete() {
+  return currentNode !== null && gNodes[currentNode]?.round === gNRounds;
+}
+
+function findNextNode(pos) {
+  const nextRound = currentNode === null ? 1 : gNodes[currentNode].round + 1;
+  const nextRoster = currentNode === null
+    ? UNITS[pos].slice()
+    : gNodes[currentNode].roster.map((v, k) => v + UNITS[pos][k]);
+  return gNodes.findIndex(n => n.round === nextRound && n.roster.every((v, k) => v === nextRoster[k]));
+}
+
+function getValidPicks() {
+  if (isDraftComplete()) return new Set();
+  const valid = new Set();
+  if (currentNode === null) {
+    gNodes.filter(n => n.round === 1).forEach(n => valid.add(n.roster.indexOf(1)));
+  } else {
+    gCh[currentNode].forEach(c => {
+      const diff = gNodes[c].roster.map((v, k) => v - gNodes[currentNode].roster[k]);
+      valid.add(diff.indexOf(1));
+    });
+  }
+  return valid;
+}
+
+function getDraftReachable() {
+  if (currentNode === null) return new Set(gNodes.map(n => n.index));
+  const reach = new Set(); const q = [currentNode];
+  while (q.length) { const v = q.shift(); reach.add(v); gCh[v].forEach(c => { if (!reach.has(c)) q.push(c); }); }
+  return reach;
+}
+
+function getPathEdgeSet() {
+  const set = new Set();
+  for (let i = 0; i < draftPath.length - 1; i++) {
+    const idx = gEdges.findIndex(e => e.source === draftPath[i] && e.target === draftPath[i+1]);
+    if (idx >= 0) set.add(idx);
+  }
+  return set;
+}
+
+function makePick(pos, exactVal = null, pickedPlayer = null) {
+  if (!draftMode || isDraftComplete()) return;
+  const next = findNextNode(pos);
+  if (next < 0) return;
+  // Compute initial best val before first pick (currentNode is still null at this point)
+  if (initialBestVal === null && playerData.length) {
+    computeEdgeValues();
+    const bp = rankPaths(1);
+    initialBestVal = bp.length ? bp[0].val : 0;
+  }
+  draftPath.push(next); currentNode = next;
+  if (exactVal !== null) {
+    draftPickVals.push(exactVal);
+  } else {
+    const pick  = snakePick(draftSlot, leagueSize, gNodes[next].round);
+    const avail = bpaFilter(pos, pick);
+    draftPickVals.push(avail.length ? Math.max(...avail.map(p => p.val)) : 0);
+  }
+  draftPickedPlayers.push(pickedPlayer);
+  if (playerData.length) draftBestRemaining.push(bestRemainingVal(currentNode));
+  if (!selectedNodes.size) renderPanel(gNodes[currentNode]);
+  renderAll();
+  rankHighlight = null;
+  renderPathRankings();
+}
+
+function undoPick() {
+  if (!draftMode || !draftPath.length) return;
+  draftPath.pop(); draftPickVals.pop(); draftPickedPlayers.pop(); draftBestRemaining.pop();
+  currentNode = draftPath.length ? draftPath[draftPath.length - 1] : null;
+  if (!selectedNodes.size) renderPanel(currentNode !== null ? gNodes[currentNode] : null);
+  renderAll();
+  rankHighlight = null;
+  renderPathRankings();
+}
+
+function resetDraft() {
+  draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null;
+  if (!selectedNodes.size) renderPanel(null);
+  renderAll();
+  rankHighlight = null;
+  renderPathRankings();
+}
+
+function toggleDraftMode() {
+  switchTab(draftMode ? 'init' : 'draft');
+}
+
+function updateDraftBar() {
+  const roster = currentNode !== null ? gNodes[currentNode].roster : [0,0,0,0];
+  const complete = isDraftComplete();
+  document.getElementById('d-maxround').textContent = gNRounds;
+  document.getElementById('d-round').textContent = complete ? gNRounds : Math.min(draftPath.length + 1, gNRounds);
+  ['d-rb','d-wr','d-te','d-qb'].forEach((id, k) => { document.getElementById(id).textContent = roster[k]; });
+  document.getElementById('draft-status').textContent = complete ? 'Draft complete — ' + gNodes[currentNode].label : '';
+  document.getElementById('undo-btn').disabled = !draftPath.length;
+  const valid = getValidPicks();
+  document.querySelectorAll('.pickbtn').forEach(btn => btn.classList.toggle('valid', valid.has(+btn.dataset.pos)));
+}
+
+// ── Unified render ────────────────────────────────────────────────────────────
+
+let hov = null, selectedNodes = new Set();  // multi-select node indices
+
+function getAncestors(nodeIdx) {
+  const ancs = new Set([nodeIdx]);
+  const q = [nodeIdx];
+  while (q.length) {
+    const v = q.shift();
+    (gPa[v] || []).forEach(p => { if (!ancs.has(p)) { ancs.add(p); q.push(p); } });
+  }
+  return ancs;
+}
+
+// Returns set of nodes that lie on at least one full path through ALL selectedNodes.
+// Returns null when selectedNodes is empty.
+function getCompatibleNodes() {
+  if (selectedNodes.size === 0) return null;
+  const sel = [...selectedNodes].sort((a, b) => gNodes[a].round - gNodes[b].round);
+  const startSet = new Set(gNodes.filter(n => n.round === 1).map(n => n.index));
+  const termSet  = new Set(gNodes.filter(n => n.round === gNRounds).map(n => n.index));
+  const waypoints = [startSet, ...sel.map(i => new Set([i])), termSet];
+  const compatible = new Set();
+  for (let seg = 0; seg < waypoints.length - 1; seg++) {
+    const from = waypoints[seg], to = waypoints[seg + 1];
+    const fwd = new Set(from); const fq = [...from];
+    while (fq.length) { const v = fq.shift(); for (const c of (gCh[v] || [])) { if (!fwd.has(c)) { fwd.add(c); fq.push(c); } } }
+    const bwd = new Set(to);   const bq = [...to];
+    while (bq.length) { const v = bq.shift(); for (const p of (gPa[v] || [])) { if (!bwd.has(p)) { bwd.add(p); bq.push(p); } } }
+    for (const n of fwd) { if (bwd.has(n)) compatible.add(n); }
+  }
+  return compatible;
+}
+
+function renderAll() {
+  drawLegend(curKey);
+  if (draftMode) updateDraftBar();
+  if (!gNgs) return;
+
+  // Node radius scaled by out-degree (local flexibility)
+  const outDegs = gM.outDeg || [];
+  const maxOD = Math.max(1, ...outDegs);
+  const R_MIN = 12, R_MAX = 30;
+  const nodeRFn = i => R_MIN + (R_MAX - R_MIN) * ((outDegs[i] ?? 0) / maxOD);
+
+  const cs   = makeScale(curKey);
+  const vals = gM[curKey] || [];
+  const md   = METRICS.find(m => m.key === curKey);
+
+  const reach     = draftMode ? getDraftReachable() : new Set(gNodes.map(n => n.index));
+  const visited   = new Set(draftPath.slice(0, -1));
+  const nextSet   = draftMode && !isDraftComplete()
+    ? (currentNode === null
+        ? new Set(gNodes.filter(n => n.round === 1).map(n => n.index))
+        : new Set(gCh[currentNode]))
+    : new Set();
+  const pathEdges  = getPathEdgeSet();
+  const hovNext    = hov ? new Set(gCh[hov.index]) : new Set();
+  const compatible = getCompatibleNodes();  // null if no selection
+
+  // Map each draft-path node index → the position color used to reach it
+  const pickColors = new Map();
+  for (let i = 0; i < draftPath.length; i++) {
+    const cur  = gNodes[draftPath[i]].roster;
+    const prev = i > 0 ? gNodes[draftPath[i - 1]].roster : [0, 0, 0, 0];
+    const pos  = cur.findIndex((v, k) => v !== prev[k]);
+    if (pos >= 0) pickColors.set(draftPath[i], PICK_COLORS[pos]);
+  }
+
+  gNgs.each(function(d) {
+    const g    = d3.select(this);
+    const circ = g.select('.ncirc');
+    const r = nodeRFn(d.index);
+    circ.attr('r', r);
+    g.select('.nval').attr('y', -(r + 5));
+    const isCurrent = draftMode && d.index === currentNode;
+    const isVisited = draftMode && visited.has(d.index);
+    const isNext    = draftMode && nextSet.has(d.index);
+    const isReach      = reach.has(d.index);
+    const isSelCompDim = compatible !== null && !compatible.has(d.index);
+    const isDim        = (draftMode && !isReach && !isCurrent && !isVisited) || isSelCompDim;
+    const isHov     = hov && hov.index === d.index;
+    const isSel     = selectedNodes.has(d.index);
+    const isHovNext = hov && !isHov && !isCurrent && !isDim && hovNext.has(d.index);
+
+    g.attr('opacity', isDim ? 0.15 : 1);
+    const fill = isDim ? '#e0e0e0' : cs(vals[d.index] ?? 0);
+    circ.attr('fill', fill);
+    g.select('.nlabel').attr('fill', isDim ? '#bbb' : labelColor(fill));
+    g.select('.nval').text(isDim ? '' : md.fmt(vals[d.index] ?? 0));
+
+    const isRankNode = rankHighlight && rankHighlight.nodeSet.has(d.index);
+    let stroke = '#666', sw = 0.8;
+    if      (isCurrent)  { stroke = pickColors.get(d.index) ?? '#c95f0a'; sw = 3.5; }
+    else if (isSel)      { stroke = '#185FA5'; sw = 3; }
+    else if (isHov)      { stroke = '#185FA5'; sw = 2; }
+    else if (isHovNext)  { stroke = '#185FA5'; sw = 1.8; }
+    else if (isVisited)  { stroke = pickColors.get(d.index) ?? '#888';    sw = 2; }
+    else if (isNext)     { stroke = '#185FA5'; sw = 1.5; }
+    else if (isRankNode) { stroke = '#15803D'; sw = 1.8; }
+    circ.style('stroke', stroke).style('stroke-width', sw);
+  });
+
+  // Edges from the hovered or selected node get thick, position-colored lines+arrows.
+  // Opacity is at element level so the marker fades in sync with the line.
+  // CSS .edge overrides attr(), so use style() for stroke/stroke-width.
+  gEdgeSels.each(function(d, ei) {
+    const isPath     = pathEdges.has(ei);
+    const isSelSrc   = selectedNodes.has(d.source);
+    const isHovSrc   = hov && d.source === hov.index;
+    const isRankEdge = rankHighlight && rankHighlight.edgeSet.has(ei);
+    const srcOk    = reach.has(d.source) || draftPath.includes(d.source);
+    const tgtOk    = reach.has(d.target) || draftPath.includes(d.target);
+    const draftDim = draftMode && !srcOk && !tgtOk;
+    const selDim   = (selectedNodes.size > 0 || hov) && !isSelSrc && !isHovSrc && !isPath && !isRankEdge;
+
+    let color, width, opacity, marker;
+    if (isPath) {
+      color = PICK_COLORS[d.pos] ?? '#c95f0a'; width = 2.5; opacity = 0.88; marker = POS_MARKERS[d.pos] ?? 'arr-orange';
+    } else if (isSelSrc) {
+      color   = PICK_COLORS[d.pos]  ?? '#185FA5';
+      marker  = POS_MARKERS[d.pos]  ?? 'arr-blue';
+      width   = 3.5; opacity = 0.9;
+    } else if (isHovSrc) {
+      color   = PICK_COLORS[d.pos]  ?? '#185FA5';
+      marker  = POS_MARKERS[d.pos]  ?? 'arr-blue';
+      width   = 2.5; opacity = 0.75;
+    } else if (isRankEdge) {
+      color = '#15803D'; width = 2.2; opacity = 0.82; marker = 'arr-green';
+    } else {
+      color = '#bbb'; width = 1.9; marker = 'arr-gray';
+      opacity = draftDim ? 0.06 : selDim ? 0.1 : 0.42;
+    }
+    const esx = gNodes[d.source].x, esy = gNodes[d.source].y;
+    const etx = gNodes[d.target].x, ety = gNodes[d.target].y;
+    const elen = Math.hypot(etx - esx, ety - esy) || 1;
+    const eux = (etx - esx) / elen, euy = (ety - esy) / elen;
+    const esr = nodeRFn(d.source), etr = nodeRFn(d.target);
+    d3.select(this)
+      .style('stroke',       color)
+      .style('stroke-width', width)
+      .attr('opacity',       opacity)
+      .attr('marker-end',   `url(#${marker})`)
+      .attr('x1', esx + eux * esr).attr('y1', esy + euy * esr)
+      .attr('x2', etx - eux * etr).attr('y2', ety - euy * etr);
+  });
+  renderDraftTracker();
+  renderDraftSidebar();
+  renderLineupPanel(rankHighlight?.path ?? null);
+}
+
+// ── Draft path tracker ────────────────────────────────────────────────────────
+
+function renderDraftTracker() {
+  const el = document.getElementById('draft-tracker');
+  if (!el) return;
+  if (!draftMode || !draftPath.length) { el.innerHTML = ''; return; }
+  const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  const hasSac = initialBestVal !== null && draftBestRemaining.length === draftPath.length;
+  let running = 0, totalSac = 0;
+  const posTotals = [0, 0, 0, 0];
+  const rows = draftPath.map((idx, i) => {
+    const cur  = gNodes[idx].roster;
+    const prev = i > 0 ? gNodes[draftPath[i - 1]].roster : [0, 0, 0, 0];
+    const pos  = cur.findIndex((v, k) => v !== prev[k]);
+    const color = PICK_COLORS[pos] ?? '#aaa';
+    const val = draftPickVals[i] ?? 0;
+    running += val;
+    if (pos >= 0) posTotals[pos] += val;
+    let sacHtml = '';
+    if (hasSac && draftBestRemaining[i] !== undefined) {
+      const R_prev = i === 0 ? initialBestVal : draftBestRemaining[i - 1];
+      const sac = Math.max(0, R_prev - val - draftBestRemaining[i]);
+      totalSac += sac;
+      const isZero = sac < 0.05;
+      sacHtml = `<span class="dt-sac${isZero ? ' zero' : ''}">Δ${isZero ? '0' : '−' + sac.toFixed(1)}</span>`;
+    }
+    return `<div class="dt-pick">
+      <div class="dt-dot" style="background:${color}"></div>
+      <span class="dt-round">R${i + 1}</span>
+      <span class="dt-pos" style="color:${color}">${POS[pos] ?? '?'}</span>
+      <span class="dt-pickval${val < 0 ? ' neg' : ''}">${fmt(val)}</span>
+      <span class="dt-running${running < 0 ? ' neg' : ''}">∑${fmt(running)}</span>
+      ${sacHtml}
+    </div>`;
+  });
+  const posRowHtml = POS.map((p, k) => {
+    if (!posTotals[k]) return '';
+    const c = PICK_COLORS[k];
+    return `<span class="dt-pos-entry" style="color:${c}">${p} <span class="pv${posTotals[k] < 0 ? ' neg' : ''}">${fmt(posTotals[k])}</span></span>`;
+  }).filter(Boolean).join('');
+  const sacSummary = hasSac && totalSac > 0.05
+    ? `<div class="dt-total-row">Lost vs max: <strong class="neg">−${totalSac.toFixed(1)}</strong></div>` : '';
+  el.innerHTML = `<h3>Draft Path</h3>${rows.join('')}
+    <div class="dt-summary">
+      <div class="dt-pos-row">${posRowHtml}</div>
+      <div class="dt-total-row">Total: <strong class="${running < 0 ? 'neg' : ''}">${fmt(running)}</strong></div>
+      ${sacSummary}
+    </div>`;
+}
+
+// ── Draft sidebar ─────────────────────────────────────────────────────────────
+
+function renderDraftSidebar() {
+  const body = document.getElementById('dsb-body');
+  const lbl  = document.getElementById('dsb-pick-lbl');
+  if (!body) return;
+  if (!draftMode || !playerData.length) { body.innerHTML = ''; if (lbl) lbl.textContent = ''; return; }
+
+  const round = currentNode !== null ? gNodes[currentNode].round + 1 : 1;
+  if (round > gNRounds) {
+    body.innerHTML = '<p class="phint">Draft complete</p>';
+    if (lbl) lbl.textContent = '';
+    return;
+  }
+
+  const pick = snakePick(draftSlot, leagueSize, round);
+  if (lbl) lbl.textContent = `Round ${round} · Pick ${pick}`;
+
+  // Availability zone: delta = ADP − pick (positive = player goes later)
+  function zone(p) {
+    const d = p.adp - pick;
+    if (d >= -5 && d <= 5)   return 'target';
+    if (d > 5  && d <= 10)   return 'reach';
+    if (d < -5 && d >= -10)  return 'drop';
+    return null;
+  }
+  const zOrder = { drop: 0, target: 1, reach: 2 };
+  const zClass = { target: 'avt', drop: 'avd', reach: 'avr' };
+
+  const available = playerData
+    .filter(p => playerTags[p.adp]?.status !== 'avoid' && zone(p) !== null);
+
+  const validPicks = getValidPicks();
+
+  const sections = POS.map((posStr, posIdx) => {
+    const players = available
+      .filter(p => p.pos === posIdx)
+      .sort((a, b) => (zOrder[zone(a)] - zOrder[zone(b)]) || (a.adp - b.adp));
+    return { posStr, posIdx, players, valid: validPicks.has(posIdx) };
+  }).filter(s => s.players.length);
+
+  if (!sections.length) {
+    body.innerHTML = `<p class="phint">No players in window (pick ${pick})</p>`;
+    return;
+  }
+
+  body.innerHTML = sections.map(({ posStr, posIdx, players, valid }) => {
+    const posColor = PICK_COLORS[posIdx] ?? '#666';
+    const rows = players.map(p => {
+      const z = zone(p);
+      const isTagged = playerTags[p.adp]?.status === 'target';
+      const valClass = p.val >= 0 ? 'vpos' : 'vneg';
+      const valStr = (p.val >= 0 ? '+' : '') + p.val.toFixed(1);
+      return `<div class="dsb-player${valid ? ' dsb-valid' : ' dsb-invalid'}" data-pos="${posIdx}" data-val="${p.val}" data-adp="${p.adp}" style="${valid ? '' : 'opacity:0.4;cursor:default'}">
+        <span class="dsb-avail ${zClass[z]}">${z}</span>
+        <span class="dsb-name${isTagged ? ' tagged' : ''}">${shortName(p.name)}</span>
+        <span class="dsb-adp">${p.adp}</span>
+        <span class="dsb-val ${valClass}">${valStr}</span>
+      </div>`;
+    }).join('');
+    return `<div class="dsb-pos-head" style="color:${posColor}">${posStr}</div>${rows}`;
+  }).join('');
+
+  body.querySelectorAll('.dsb-player.dsb-valid').forEach(row => {
+    row.addEventListener('click', () => {
+      const adp = +row.dataset.adp;
+      const player = playerData.find(q => q.adp === adp) ?? null;
+      makePick(+row.dataset.pos, parseFloat(row.dataset.val), player);
+    });
+  });
+}
+
+// ── Player value / path ranking ───────────────────────────────────────────────
+
+function loadRankings() {
+  playerData = [];
+  RANKINGS_CSV.trim().split('\n').slice(1).forEach(line => {
+    const parts = line.split(',');
+    const posStr = parts[1]?.trim();
+    const posIdx = POS.indexOf(posStr);
+    if (posIdx < 0) return;
+    playerData.push({
+      name: parts[0].trim(),
+      pos: posIdx,
+      posStr,
+      adpRound: +parts[2],
+      adp: +parts[4],
+      val: +parts[5],
+      bye: +parts[6],
+      team: parts[7]?.trim() ?? '',
+    });
+  });
+}
+
+function snakePick(slot, size, round) {
+  return round % 2 === 1 ? (round - 1) * size + slot : round * size - slot + 1;
+}
+
+function bpaFilter(pos, pick) {
+  const pool = playerData.filter(p => p.pos === pos && playerTags[p.adp]?.status !== 'avoid');
+  if (bpaMode === 'strict') return pool.filter(p => p.adp >= pick);
+  return pool.filter(p => p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
+}
+
+function computeEdgeValues() {
+  if (!playerData.length) return;
+  // Round-1 nodes: the first pick value (no incoming edge exists)
+  gNodes.forEach(nd => {
+    if (nd.round !== 1) return;
+    const pos   = nd.roster.findIndex(v => v > 0);
+    const pick  = snakePick(draftSlot, leagueSize, 1);
+    const avail = bpaFilter(pos, pick);
+    nd.pickVal  = avail.length ? Math.max(...avail.map(p => p.val)) : 0;
+  });
+  // Each edge: best available at the position picked in target's round
+  gEdges.forEach(e => {
+    const pick  = snakePick(draftSlot, leagueSize, gNodes[e.target].round);
+    const avail = bpaFilter(e.pos, pick);
+    e.val = avail.length ? Math.max(...avail.map(p => p.val)) : 0;
+  });
+}
+
+function rankPaths(K = 10) {
+  if (!playerData.length || !gNodes.length) return [];
+  const edgeMap = new Map(gEdges.map((e, i) => [`${e.source}-${e.target}`, i]));
+  const results = [], curNodes = [], curEdges = [];
+  let found = 0;
+  function dfs(ni, val) {
+    if (found >= 50000) return;
+    curNodes.push(ni);
+    if (gNodes[ni].round === gNRounds) {
+      results.push({ nodes: curNodes.slice(), edges: curEdges.slice(), val });
+      found++;
+    } else {
+      for (const child of gCh[ni]) {
+        const ei  = edgeMap.get(`${ni}-${child}`);
+        const ev  = ei !== undefined ? (gEdges[ei].val ?? 0) : 0;
+        curEdges.push(ei ?? -1);
+        dfs(child, val + ev);
+        curEdges.pop();
+      }
+    }
+    curNodes.pop();
+  }
+  if (selectedNodes.size > 0) {
+    // Multi-select: always rank full paths from R1, filter to those containing all selected nodes
+    gNodes.filter(n => n.round === 1).forEach(n => dfs(n.index, n.pickVal ?? 0));
+    return results.filter(p => [...selectedNodes].every(sn => p.nodes.includes(sn)))
+                  .sort((a, b) => b.val - a.val).slice(0, K);
+  } else if (draftMode && currentNode !== null) {
+    dfs(currentNode, 0);
+  } else {
+    gNodes.filter(n => n.round === 1).forEach(n => dfs(n.index, n.pickVal ?? 0));
+  }
+  results.sort((a, b) => b.val - a.val);
+  return results.slice(0, K);
+}
+
+// Top-K paths from currentNode whose first pick is `pos`, regardless of overall rank
+function rankPathsForFirstPos(pos, K = 2) {
+  if (!playerData.length || !gNodes.length || currentNode === null) return [];
+  const edgeMap = new Map(gEdges.map((e, i) => [`${e.source}-${e.target}`, i]));
+  const posChildren = (gCh[currentNode] || []).filter(child => {
+    const cur = gNodes[child].roster, prev = gNodes[currentNode].roster;
+    return cur.findIndex((v, k) => v !== prev[k]) === pos;
+  });
+  if (!posChildren.length) return [];
+  const results = [], curNodes = [currentNode], curEdges = [];
+  let found = 0;
+  function dfs(ni, val) {
+    if (found >= 10000) return;
+    curNodes.push(ni);
+    if (gNodes[ni].round === gNRounds) {
+      results.push({ nodes: curNodes.slice(), edges: curEdges.slice(), val });
+      found++;
+    } else {
+      for (const child of gCh[ni]) {
+        const ei = edgeMap.get(`${ni}-${child}`);
+        curEdges.push(ei ?? -1);
+        dfs(child, val + (ei !== undefined ? (gEdges[ei].val ?? 0) : 0));
+        curEdges.pop();
+      }
+    }
+    curNodes.pop();
+  }
+  for (const child of posChildren) {
+    const ei = edgeMap.get(`${currentNode}-${child}`);
+    curEdges.push(ei ?? -1);
+    dfs(child, ei !== undefined ? (gEdges[ei].val ?? 0) : 0);
+    curEdges.pop();
+  }
+  results.sort((a, b) => b.val - a.val);
+  return results.slice(0, K);
+}
+
+function bestRemainingVal(startIdx) {
+  if (!gNodes.length || !gNodes[startIdx] || !playerData.length) return 0;
+  computeEdgeValues();
+  const edgeMap = new Map(gEdges.map((e, i) => [`${e.source}-${e.target}`, i]));
+  let best = -Infinity, found = 0;
+  function dfs(ni, val) {
+    if (found >= 50000) return;
+    if (gNodes[ni].round === gNRounds) { found++; best = Math.max(best, val); return; }
+    for (const child of gCh[ni]) {
+      const ei = edgeMap.get(`${ni}-${child}`);
+      const ev = ei !== undefined ? (gEdges[ei].val ?? 0) : 0;
+      dfs(child, val + ev);
+    }
+  }
+  dfs(startIdx, 0);
+  return best === -Infinity ? 0 : best;
+}
+
+const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v']);
+function shortName(fullName) {
+  const parts = fullName.split(' ');
+  const last = parts.findLast(w => !SUFFIXES.has(w.replace(/\./g, '').toLowerCase())) ?? parts[parts.length - 1];
+  const suffix = parts[parts.length - 1] !== last ? ' ' + parts[parts.length - 1] : '';
+  return `${parts[0].charAt(0)}. ${last}${suffix}`;
+}
+
+function seededRng(seed) {
+  let s = (seed * 1664525 + 1013904223) & 0x7fffffff;
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0x7fffffff;
+    return s / 0x7fffffff;
+  };
+}
+
+// P(player still available at pickNum), modeled as logistic on ADP distance
+function adpAvailProb(adp, pickNum, sigma = 5) {
+  return 1 / (1 + Math.exp(-(adp - pickNum) / sigma));
+}
+
+// Run N seeded simulations for a path using ADP-weighted availability.
+// Returns { deltas: number[], nonViablePct: number }
+function simulatePathDistribution(path, N = 1000) {
+  if (!playerData.length || !gNodes.length) return { deltas: [], nonViablePct: 0 };
+  const isFromCN = draftMode && currentNode !== null &&
+                   path.nodes.length > 0 && path.nodes[0] === currentNode;
+  const futurePicks = [];
+  for (let j = (isFromCN ? 1 : 0); j < path.nodes.length; j++) {
+    const prevRoster = j === 0 ? [0,0,0,0] : gNodes[path.nodes[j-1]].roster;
+    const cur = gNodes[path.nodes[j]].roster;
+    const pos = cur.findIndex((v,k) => v !== prevRoster[k]);
+    if (pos >= 0) futurePicks.push({ pos, round: gNodes[path.nodes[j]].round });
+  }
+  // Pre-compute candidate pool + ADP weights once per pick
+  const pickSlots = futurePicks.map(({ pos, round }) => {
+    const pick = snakePick(draftSlot, leagueSize, round);
+    const pool = playerData.filter(p => p.pos === pos && playerTags[p.adp]?.status !== 'avoid');
+    const inWindow   = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
+    const randWindow = p => p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter;
+    const tPool = pool.filter(p => playerTags[p.adp]?.status === 'target' && randWindow(p));
+    const rPool = pool.filter(randWindow);
+    const bPool = pool.filter(inWindow).sort((a,b) => b.val - a.val);
+    const candidates = tPool.length ? tPool : (rPool.length ? rPool : bPool);
+    const weights = candidates.map(p => adpAvailProb(p.adp, pick));
+    return { candidates, weights, fallback: bPool[0] ?? null };
+  });
+  const pastVal = draftPickVals.reduce((s,v) => s+v, 0);
+  const adjustedMax = isFromCN ? pastVal + path.val : path.val;
+  const deltas = [];
+  let nonViable = 0;
+  for (let sim = 0; sim < N; sim++) {
+    const rng = seededRng(sim * 9973 + 7);
+    let futV = 0, viable = true;
+    for (const { candidates, weights, fallback } of pickSlots) {
+      // Bernoulli trial per candidate based on ADP availability
+      const avail = candidates.filter((_, i) => rng() < weights[i]);
+      if (avail.length === 0) {
+        if (fallback) { futV += fallback.val; }  // got something, but not in window
+        else { viable = false; break; }
+      } else {
+        futV += avail[Math.floor(rng() * avail.length)].val;
+      }
+    }
+    if (!viable) { nonViable++; continue; }
+    deltas.push(pastVal + futV - adjustedMax);
+  }
+  return { deltas, nonViablePct: Math.round(nonViable / N * 100) };
+}
+
+function renderLineupPanel(path) {
+  const el = document.getElementById('panel-body');
+  if (!el) return;
+
+  // Auto-select top path when none explicitly chosen
+  let isAutoPath = false;
+  if (!path) {
+    computeEdgeValues();
+    const top = rankPaths(1);
+    if (top.length) { path = top[0]; isAutoPath = true; }
+  }
+
+  if (!path) {
+    lineupRerollCount = 0;
+    el.innerHTML = `<p class="phint">No paths available. Adjust rules to generate a graph.</p>`;
+    return;
+  }
+
+  const fmt = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  const rng = seededRng(lineupRerollCount * 9973 + 7);
+  const isMultiSel = selectedNodes.size > 0;
+
+  // Past picks (from draftPath in draft mode, skipped in multi-select)
+  const pastPicks = (!isMultiSel && draftMode) ? draftPath.map((idx, i) => {
+    const cur  = gNodes[idx].roster;
+    const prev = i > 0 ? gNodes[draftPath[i - 1]].roster : [0, 0, 0, 0];
+    return { pos: cur.findIndex((v, k) => v !== prev[k]), round: gNodes[idx].round,
+             player: draftPickedPlayers[i] ?? null, explicit: !!draftPickedPlayers[i] };
+  }) : [];
+
+  // Fill BPA for past picks without explicit player selection
+  if (playerData.length && !isMultiSel) {
+    pastPicks.forEach(pp => {
+      if (pp.player || pp.pos < 0) return;
+      const pick = snakePick(draftSlot, leagueSize, pp.round);
+      const pool = playerData.filter(p => p.pos === pp.pos && playerTags[p.adp]?.status !== 'avoid');
+      const inW  = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
+      const bpaPool = pool.filter(inW).sort((a, b) => b.val - a.val);
+      pp.player = bpaPool[0] ?? null; pp.source = 'bpa';
+    });
+  }
+
+  // Future picks encoded in path
+  const isFromCN = !isMultiSel && draftMode && currentNode !== null && path.nodes.length > 0 && path.nodes[0] === currentNode;
+  const futurePicks = [];
+  for (let j = (isFromCN ? 1 : 0); j < path.nodes.length; j++) {
+    const prevRoster = j === 0 ? [0, 0, 0, 0] : gNodes[path.nodes[j - 1]].roster;
+    const cur = gNodes[path.nodes[j]].roster;
+    const pos = cur.findIndex((v, k) => v !== prevRoster[k]);
+    if (pos >= 0) futurePicks.push({ pos, round: gNodes[path.nodes[j]].round, player: null, source: '' });
+  }
+
+  // Assign projected players to future picks (unique players tracked across all picks)
+  if (playerData.length) {
+    const usedAdps = new Set(pastPicks.filter(pp => pp.player).map(pp => pp.player.adp));
+    const isRolled = lineupRerollCount > 0;
+    futurePicks.forEach(fp => {
+      const pick = snakePick(draftSlot, leagueSize, fp.round);
+      const pool = playerData.filter(p => p.pos === fp.pos && !usedAdps.has(p.adp) && playerTags[p.adp]?.status !== 'avoid');
+      const isTarget   = p => playerTags[p.adp]?.status === 'target';
+      const tPriority  = p => playerTags[p.adp]?.priority ?? 0;
+      const inWindow   = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
+      const randWindow = p => p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter;
+      const targetPool = pool.filter(p => isTarget(p) && (isRolled ? randWindow(p) : inWindow(p)));
+      if (targetPool.length) {
+        if (isRolled) {
+          const avail = targetPool.filter(p => rng() < adpAvailProb(p.adp, pick));
+          const src = avail.length ? avail : targetPool;
+          fp.player = src[Math.floor(rng() * src.length)]; fp.source = 'target';
+        } else {
+          targetPool.sort((a, b) => (tPriority(b) - tPriority(a)) || (b.val - a.val));
+          fp.player = targetPool[0]; fp.source = 'target';
+        }
+      } else {
+        const bpaPool = pool.filter(inWindow).sort((a, b) => b.val - a.val);
+        if (!isRolled) {
+          fp.player = bpaPool[0] ?? null; fp.source = bpaPool.length ? 'bpa' : 'none';
+        } else {
+          const randPool = pool.filter(randWindow);
+          const avail = randPool.filter(p => rng() < adpAvailProb(p.adp, pick));
+          const src = avail.length ? avail : (randPool.length ? randPool : bpaPool);
+          if (src.length) { fp.player = src[Math.floor(rng() * src.length)]; fp.source = 'bpa'; }
+          else { fp.player = null; fp.source = 'none'; }
+        }
+      }
+      if (fp.player) usedAdps.add(fp.player.adp);
+    });
+  }
+
+  const allPicks = [...pastPicks, ...futurePicks];
+  const pastVal   = isMultiSel ? 0 : draftPickVals.reduce((s, v) => s + v, 0);
+  const futureVal = futurePicks.reduce((s, fp) => s + (fp.player?.val ?? 0), 0);
+  const projTotal = pastVal + futureVal;
+  const adjustedMax = isFromCN ? pastVal + path.val : path.val;
+  const deviation = projTotal - adjustedMax;
+  const curRound  = isMultiSel ? 0 : (currentNode !== null ? gNodes[currentNode].round : 0);
+
+  const rowsHtml = allPicks.map(({ pos, round, player, explicit, source }) => {
+    if (pos < 0) return '';
+    const posColor = PICK_COLORS[pos] ?? '#666';
+    const isPast   = round <= curRound;
+    const isProj   = !isPast; // future picks are always projected/muted
+    const badge    = source === 'target' ? '<span class="lp-tag">★</span>' :
+                     explicit ? '<span class="lp-tag lp-tag-ok">✓</span>' : '';
+    const name = player ? shortName(player.name) : '—';
+    const valStr = player ? fmt(player.val) : '—';
+    const valNeg = player && player.val < 0;
+    return `<div class="lp-pick${isPast ? ' lp-past' : ''}${isProj ? ' lp-proj' : ''}">
+      <span class="lp-round" style="color:${posColor}">R${round} ${POS[pos]}</span>
+      <span class="lp-name">${badge}${name}</span>
+      <span class="lp-val${valNeg ? ' neg' : ''}">${valStr}</span>
+    </div>`;
+  }).join('');
+
+  const rollLabel = lineupRerollCount === 0 ? '↺ Re-roll' : `↺ Roll ${lineupRerollCount + 1}`;
+  const canSave = rankHighlight || (draftMode && draftPath.length > 0);
+  const saveDisabled = savedPaths.length >= 5 ? ' disabled' : '';
+  const saveBtn = canSave ? `<button class="lp-save-btn" id="lp-save-btn"${saveDisabled}>Save</button>` : '';
+  el.innerHTML = `<div class="lp-summary">
+    <div class="lp-total-row">
+      <span class="lp-label">Projected</span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <span class="lp-val${projTotal < 0 ? ' neg' : ''}">${fmt(projTotal)}</span>
+        <button class="lp-reroll-btn" id="lp-reroll-btn">${rollLabel}</button>
+        ${saveBtn}
+      </span>
+    </div>
+    <div class="lp-total-row"><span class="lp-label">Path max</span><span class="lp-val">${fmt(adjustedMax)}</span></div>
+    <div class="lp-total-row"><span class="lp-label">vs max</span><span class="lp-val${deviation < 0 ? ' neg' : ''}">${fmt(deviation)}</span></div>
+  </div>${rowsHtml}`;
+  el.querySelector('#lp-reroll-btn')?.addEventListener('click', () => {
+    lineupRerollCount++;
+    renderLineupPanel(rankHighlight?.path ?? null);
+  });
+  el.querySelector('#lp-save-btn')?.addEventListener('click', () => {
+    if (rankHighlight?.path) {
+      const rem = rankHighlight.path;
+      if (draftMode && draftPath.length > 0) {
+        const { nodes, edges, val, simPath } = buildFullPath(rem);
+        savePath({ nodes, edges, val }, simPath);
+      } else {
+        savePath(rem);
+      }
+    } else {
+      saveDraftPath();
+    }
+    renderLineupPanel(rankHighlight?.path ?? null);
+  });
+}
+
+function pathsThrough(targetIdx, K = 5) {
+  if (!gNodes.length) return [];
+  const edgeMap = new Map(gEdges.map((e, i) => [`${e.source}-${e.target}`, i]));
+  const results = [];
+  const curNodes = [], curEdges = [];
+  let found = 0;
+  function dfs(ni, val, hasTarget) {
+    if (found >= 50000) return;
+    curNodes.push(ni);
+    const nowHasTarget = hasTarget || (ni === targetIdx);
+    if (gNodes[ni].round === gNRounds) {
+      if (nowHasTarget) {
+        results.push({ nodes: curNodes.slice(), edges: curEdges.slice(), val });
+        found++;
+      }
+    } else {
+      for (const child of gCh[ni]) {
+        const ei = edgeMap.get(`${ni}-${child}`);
+        const ev = (ei !== undefined && gEdges[ei].val !== undefined) ? gEdges[ei].val : 0;
+        curEdges.push(ei ?? -1);
+        dfs(child, val + ev, nowHasTarget);
+        curEdges.pop();
+      }
+    }
+    curNodes.pop();
+  }
+  computeEdgeValues();
+  gNodes.filter(n => n.round === 1).forEach(n => dfs(n.index, n.pickVal ?? 0, false));
+  results.sort((a, b) => b.val - a.val);
+  return results.slice(0, K);
+}
+
+function renderPathRankings() {
+  const el = document.getElementById('path-list');
+  if (!el) return;
+  computeEdgeValues();
+
+  const isMultiSel = selectedNodes.size > 0;
+  const inDraftWithNode = !isMultiSel && draftMode && currentNode !== null;
+
+  const allPaths = rankPaths(inDraftWithNode ? 50 : 10);
+  const clrBtn = document.getElementById('sel-clear-btn');
+  if (clrBtn) clrBtn.style.display = selectedNodes.size > 0 ? '' : 'none';
+
+  if (!allPaths.length) {
+    el.innerHTML = isMultiSel
+      ? '<p class="phint">No paths pass through all selected nodes.</p>'
+      : '<p class="phint">No paths</p>';
+    return;
+  }
+
+  // Helper: pick nodes for a path, skipping currentNode if it's the start
+  function getPickNodes(p) {
+    return (inDraftWithNode && p.nodes[0] === currentNode) ? p.nodes.slice(1) : p.nodes;
+  }
+
+
+  // Available next positions from graph edges out of currentNode
+  const availNextPosSet = new Set();
+  if (inDraftWithNode) {
+    (gCh[currentNode] || []).forEach(child => {
+      const cur = gNodes[child].roster;
+      const prev = gNodes[currentNode].roster;
+      const pos = cur.findIndex((v, k) => v !== prev[k]);
+      if (pos >= 0) availNextPosSet.add(pos);
+    });
+  }
+
+  // Past picks sequence HTML prefix
+  const pastPicks = !isMultiSel ? draftPath.map((idx, i) => {
+    const cur  = gNodes[idx].roster;
+    const prev = i > 0 ? gNodes[draftPath[i - 1]].roster : [0, 0, 0, 0];
+    return cur.findIndex((v, k) => v !== prev[k]);
+  }) : [];
+  const pastSeqHtml = pastPicks.length
+    ? pastPicks.map(pos =>
+        `<span class="pr-past-pos" style="color:${PICK_COLORS[pos] ?? '#aaa'}">${POS[pos] ?? '?'}</span>`
+      ).join('<span class="pr-sep" style="opacity:0.35">·</span>') + '<span class="pr-divline">│</span>'
+    : '';
+
+  // Build pick sequence HTML for a path (bug-fixed: skips currentNode in diff)
+  function buildSeqHtml(p) {
+    const pickNodes = getPickNodes(p);
+    const prevStart = (inDraftWithNode && p.nodes[0] === currentNode) ? currentNode : null;
+    const picks = pickNodes.map((ni, j) => {
+      const cur  = gNodes[ni].roster;
+      const prevNi = j === 0 ? prevStart : pickNodes[j - 1];
+      const prev = prevNi !== null ? gNodes[prevNi].roster : [0, 0, 0, 0];
+      return { pos: cur.findIndex((v, k) => v !== prev[k]), nodeIdx: ni };
+    });
+    if (isMultiSel) {
+      return picks.map(({ pos, nodeIdx }) => {
+        const cls = selectedNodes.has(nodeIdx) ? 'pr-pos pr-pos-sel' : 'pr-pos';
+        return `<span class="${cls}" style="color:${PICK_COLORS[pos] ?? '#aaa'}">${POS[pos] ?? '?'}</span>`;
+      }).join('<span class="pr-sep">·</span>');
+    }
+    return picks.map(({ pos }) =>
+      `<span class="pr-pos" style="color:${PICK_COLORS[pos] ?? '#aaa'}">${POS[pos] ?? '?'}</span>`
+    ).join('<span class="pr-sep">·</span>');
+  }
+
+  // Pre-compute simulations for unique paths that will appear in the render
+  const simCache = new Map();
+  function getCachedDist(p) {
+    const key = p.nodes.join(',');
+    if (!simCache.has(key)) {
+      simCache.set(key, playerData.length
+        ? simulatePathDistribution(p, 1000)
+        : { deltas: [], nonViablePct: 0 });
+    }
+    return simCache.get(key);
+  }
+
+  // Path identity check (handles same path appearing in multiple sections)
+  function isSamePath(a, b) {
+    return a && b && a.nodes.length === b.nodes.length && a.nodes.every((n, i) => n === b.nodes[i]);
+  }
+
+  // Build one row's HTML; globalIdx = index into allRendered for click handler
+  function buildRowHtml(p, globalIdx, rank, muted = false) {
+    const isAct = isSamePath(rankHighlight?.path, p);
+    const valStr = d3.format('+.1f')(p.val);
+    const neg = p.val < 0;
+    const seqHtml = buildSeqHtml(p);
+    const { deltas, nonViablePct } = getCachedDist(p);
+    let nvHtml = '', medHtml = '';
+    if (deltas.length > 0) {
+      const nvCls = nonViablePct < 10 ? 'ok' : nonViablePct < 25 ? 'warn' : 'risk';
+      nvHtml = `<span class="pr-nv pr-nv-${nvCls}" title="% simulations non-viable">${nonViablePct}% NV</span>`;
+      const sorted = [...deltas].sort((a, b) => a - b);
+      const med = sorted[Math.floor(sorted.length / 2)];
+      const mean = deltas.reduce((s, d) => s + d, 0) / deltas.length;
+      const std  = Math.sqrt(deltas.reduce((s, d) => s + (d - mean) ** 2, 0) / deltas.length);
+      const medCls = std < 1.5 ? 'ok' : std < 3.0 ? 'warn' : 'risk';
+      const medStr = (med >= 0 ? '+' : '') + med.toFixed(1);
+      medHtml = `<span class="pr-nv pr-nv-${medCls}" title="Median projected delta vs path max">med ${medStr}</span>`;
+    }
+    const rowStyle = muted ? ' style="opacity:0.32"' : '';
+    return `<div class="pr-row${isAct ? ' active' : ''}" data-pi="${globalIdx}"${rowStyle}>
+      <span class="pr-rank">${rank}</span>
+      <span class="pr-seq">${isMultiSel ? seqHtml : pastSeqHtml + seqHtml}</span>
+      <span class="pr-val${neg ? ' neg' : ''}">${valStr}</span>
+      ${medHtml}${nvHtml}
+    </div>`;
+  }
+
+  const allRendered = []; // flat list indexed by data-pi
+  let html = '';
+
+  if (!inDraftWithNode) {
+    // Simple mode: top 10 paths
+    allPaths.slice(0, 10).forEach((p, i) => {
+      allRendered.push(p);
+      html += buildRowHtml(p, i, i + 1);
+    });
+  } else {
+    // Draft mode: 3-section layout
+
+    // Section 1: Top 5 overall
+    html += `<div class="pr-section-head">Top 5</div>`;
+    allPaths.slice(0, 5).forEach((p, i) => {
+      allRendered.push(p);
+      html += buildRowHtml(p, i, i + 1);
+    });
+
+    // Section 2: Top 2 by next pick, grouped by position (dedicated DFS per pos)
+    html += `<div class="pr-section-head" style="margin-top:9px">By Next Pick</div>`;
+    POS.forEach((posName, pos) => {
+      const isAvail = availNextPosSet.has(pos);
+      const posColor = isAvail ? PICK_COLORS[pos] : '#aaa';
+      const posPaths = isAvail ? rankPathsForFirstPos(pos, 2) : [];
+      html += `<div class="pr-next-head${isAvail ? '' : ' pr-muted'}" style="color:${posColor}">${posName}</div>`;
+      if (posPaths.length) {
+        posPaths.forEach((p, i) => {
+          const gi = allRendered.length;
+          allRendered.push(p);
+          html += buildRowHtml(p, gi, i + 1, !isAvail);
+        });
+      } else {
+        const style = isAvail ? '' : ' style="opacity:0.3"';
+        html += `<div class="pr-no-paths-msg"${style}>${isAvail ? 'No ranked paths' : 'Not on graph'}</div>`;
+      }
+    });
+  }
+
+  el.innerHTML = html;
+
+  // Attach click handlers
+  el.querySelectorAll('.pr-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const pi = +row.dataset.pi;
+      const p = allRendered[pi];
+      if (isSamePath(rankHighlight?.path, p)) {
+        rankHighlight = null;
+      } else {
+        lineupRerollCount = 0;
+        rankHighlight = {
+          pathIdx: pi,
+          nodeSet: new Set(p.nodes),
+          edgeSet: new Set(p.edges.filter(e => e >= 0)),
+          path: p,
+        };
+      }
+      renderAll();
+      renderPathRankings();
+    });
+  });
+}
+
+// ── Info panel ────────────────────────────────────────────────────────────────
+
+function renderPanel(nd) {
+  const actions = document.getElementById('panel-actions');
+  const ptDiv   = document.getElementById('paths-through');
+  // panel-body is managed exclusively by renderLineupPanel; don't touch it here
+  actions.innerHTML = '';
+  if (!nd) {
+    if (ptDiv) ptDiv.innerHTML = '';
+    return;
+  }
+  // Show exclude button only when exactly this node is selected
+  if (selectedNodes.size === 1 && selectedNodes.has(nd.index)) {
+    actions.innerHTML = `<button class="excl-btn" id="excl-nd-btn">× Exclude node</button>`;
+    document.getElementById('excl-nd-btn').onclick = () => excludeNode(nd.label);
+  }
+  // Paths-through: show top-5 paths through this node in non-draft mode when it's the sole selection
+  if (ptDiv) {
+    if (!draftMode && selectedNodes.size === 1 && selectedNodes.has(nd.index) && playerData.length) {
+      const paths = pathsThrough(nd.index, 5);
+      if (paths.length) {
+        const rows2 = paths.map((p, i) => {
+          const picks = p.nodes.map((ni, j) => {
+            const cur  = gNodes[ni].roster;
+            const prev = j > 0 ? gNodes[p.nodes[j-1]].roster : [0,0,0,0];
+            return cur.findIndex((v, k) => v !== prev[k]);
+          });
+          const seq = picks.map(pos =>
+            `<span class="pr-pos" style="color:${PICK_COLORS[pos]??'#aaa'}">${POS[pos]??'?'}</span>`
+          ).join('<span class="pr-sep">·</span>');
+          const valStr = d3.format('+.1f')(p.val);
+          const neg = p.val < 0;
+          return `<div class="pr-row" data-pi="${i}" style="cursor:pointer">
+            <span class="pr-rank">${i+1}</span>
+            <span class="pr-seq">${seq}</span>
+            <span class="pr-val${neg?' neg':''}">${valStr}</span>
+          </div>`;
+        });
+        ptDiv.innerHTML = `<h3>Top Paths Through</h3>${rows2.join('')}`;
+        // Click a path: enable draft mode, replay picks up to target node
+        const stored = paths;
+        ptDiv.querySelectorAll('.pr-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const pi = +row.dataset.pi;
+            const p = stored[pi];
+            const tIdx = nd.index;
+            const cutAt = p.nodes.indexOf(tIdx);
+            if (cutAt < 0) return;
+            const subPath = p.nodes.slice(0, cutAt + 1);
+            draftPath = subPath;
+            currentNode = subPath[subPath.length - 1];
+            draftPickVals = subPath.map((idx, i) => {
+              const cur  = gNodes[idx].roster;
+              const prev = i > 0 ? gNodes[subPath[i-1]].roster : [0,0,0,0];
+              const pos  = cur.findIndex((v, k) => v !== prev[k]);
+              const pick = snakePick(draftSlot, leagueSize, gNodes[idx].round);
+              const avail = bpaFilter(pos, pick);
+              return avail.length ? Math.max(...avail.map(q => q.val)) : 0;
+            });
+            draftPickedPlayers = subPath.map(() => null);
+            draftBestRemaining = []; initialBestVal = null;
+            selectedNodes.clear();
+            rankHighlight = null;
+            switchTab('draft');
+            renderPathRankings();
+          });
+        });
+      } else {
+        ptDiv.innerHTML = '';
+      }
+    } else {
+      ptDiv.innerHTML = '';
+    }
+  }
+}
+
+// ── Interaction handlers ──────────────────────────────────────────────────────
+
+function attachNodeHandlers() {
+  gNgs
+    .on('mouseover', (evt, d) => { hov = d; renderAll(); if (!selectedNodes.size) renderPanel(d); })
+    .on('mouseout',  ()       => { hov = null; renderAll(); if (!selectedNodes.size) renderPanel(draftMode && currentNode !== null ? gNodes[currentNode] : null); })
+    .on('click',     (evt, d) => {
+      if (draftMode && !isDraftComplete()) {
+        // In draft mode: clicking a valid next node advances the pick
+        const isValidNext = currentNode === null
+          ? d.round === 1
+          : gCh[currentNode]?.includes(d.index);
+        if (isValidNext) {
+          const prevRoster = currentNode !== null ? gNodes[currentNode].roster : [0,0,0,0];
+          const pos = d.roster.findIndex((v, k) => v !== prevRoster[k]);
+          if (pos >= 0) { makePick(pos); return; }
+        }
+      }
+      // Non-draft mode (or invalid click in draft): toggle multi-select
+      if (selectedNodes.has(d.index)) selectedNodes.delete(d.index);
+      else selectedNodes.add(d.index);
+      rankHighlight = null;
+      renderAll();
+      renderPanel(selectedNodes.size === 1 ? gNodes[[...selectedNodes][0]] : null);
+      renderPathRankings();
+    });
+}
+
+// ── Graph status ──────────────────────────────────────────────────────────────
+
+function updateGraphStatus() {
+  const N = gNodes.length;
+  const E = gEdges.length;
+  const totalPaths = N ? (gM.pathCount||[]).filter((_,i) => gNodes[i].round===1).reduce((a,b)=>a+b,0) : 0;
+  const terms = N ? gNodes.filter(n => n.round === gNRounds).length : 0;
+  const src = usingHandcodedSeed ? 'seed network' : 'rule-generated';
+  document.getElementById('graph-status').innerHTML =
+    `${N} nodes · ${E} edges · ${terms} terminals<br>${totalPaths} total paths · <em>${src}</em>`;
+}
+
+// ── Rules UI ──────────────────────────────────────────────────────────────────
+
+function renderRulesList() {
+  const list = document.getElementById('rules-list');
+  if (!rules.length) {
+    list.innerHTML = '<div class="rules-empty">No rules — graph is unconstrained</div>';
+    return;
+  }
+  list.innerHTML = rules.map(r => `
+    <div class="rule-row" data-id="${r.id}">
+      <input type="checkbox" class="rule-toggle" ${r.active?'checked':''}>
+      <span class="rule-text ${r.active?'':'off'}">${r.label}</span>
+      <button class="rule-del">×</button>
+    </div>`).join('');
+
+  list.querySelectorAll('.rule-toggle').forEach(cb => {
+    cb.onchange = () => {
+      const rule = rules.find(r => r.id === +cb.closest('.rule-row').dataset.id);
+      if (rule) rule.active = cb.checked;
+      renderRulesList(); rebuildFromRules();
+    };
+  });
+  list.querySelectorAll('.rule-del').forEach(btn => {
+    btn.onclick = () => {
+      rules = rules.filter(r => r.id !== +btn.closest('.rule-row').dataset.id);
+      renderRulesList(); rebuildFromRules();
+    };
+  });
+}
+
+function rebuildFromRules() {
+  usingHandcodedSeed = false;
+  rebuild();
+}
+
+function updateRuleForm() {
+  const type = document.getElementById('rf-type').value;
+  document.getElementById('rf-count-row').style.display = type === 'no_pos_before' ? 'none' : '';
+  document.getElementById('rf-round-row').style.display = type === 'max_count'     ? 'none' : '';
+}
+
+document.getElementById('rf-type').onchange = updateRuleForm;
+updateRuleForm();
+
+document.getElementById('add-rule-btn').onclick = () => {
+  const type  = document.getElementById('rf-type').value;
+  const pos   = +document.getElementById('rf-pos').value;
+  const count = +document.getElementById('rf-count').value;
+  const round = +document.getElementById('rf-round').value;
+  rules.push(makeRule(type, pos, count, round));
+  renderRulesList(); rebuildFromRules();
+};
+
+document.getElementById('rounds-input').onchange = function() {
+  maxRound = Math.max(1, Math.min(16, +this.value || 10));
+  this.value = maxRound;
+  document.getElementById('rf-round').max = maxRound;
+  rules = defaultRules();
+  renderRulesList();
+  rebuildFromRules();
+};
+
+document.getElementById('load-seed-btn').onclick = () => {
+  usingHandcodedSeed = true;
+  applyGraph(applyExclusions(buildFromSeed()));
+};
+
+document.getElementById('reset-rules-btn').onclick = () => {
+  excluded.clear();
+  rules = defaultRules();
+  renderRulesList();
+  renderExcluded();
+  rebuildFromRules();
+};
+
+document.getElementById('clear-excl-btn').onclick = () => {
+  excluded.clear();
+  rebuild();
+  renderExcluded();
+};
+
+// Delete / Backspace excludes the selected node
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodes.size === 1 && !e.target.matches('input, select, textarea')) {
+    e.preventDefault();
+    const ni = [...selectedNodes][0];
+    excludeNode(gNodes[ni].label);
+  }
+});
+
+// Clear multi-selection button
+document.getElementById('sel-clear-btn').addEventListener('click', () => {
+  selectedNodes.clear(); rankHighlight = null;
+  renderAll(); renderPanel(null); renderPathRankings();
+});
+
+// ── Draft bar wiring ──────────────────────────────────────────────────────────
+
+document.getElementById('undo-btn').onclick     = undoPick;
+document.getElementById('reset-btn').onclick    = resetDraft;
+document.querySelectorAll('.pickbtn').forEach(btn => { btn.onclick = () => makePick(+btn.dataset.pos); });
+
+// ── Tab management ────────────────────────────────────────────────────────────
+
+function switchTab(tab) {
+  activeTab = tab;
+  const isInit  = tab === 'init';
+  const isDraft = tab === 'draft';
+  const isBoard = tab === 'board';
+  const isSaved = tab === 'saved';
+  const isInfo  = tab === 'info';
+  document.getElementById('tab-init-btn').classList.toggle('active',  isInit);
+  document.getElementById('tab-draft-btn').classList.toggle('active', isDraft);
+  document.getElementById('tab-board-btn').classList.toggle('active', isBoard);
+  document.getElementById('tab-saved-btn').classList.toggle('active', isSaved);
+  document.getElementById('tab-info-btn').classList.toggle('active',  isInfo);
+  if (isDraft && !draftMode) {
+    draftMode = true;
+    selectedNodes.clear();
+  } else if (!isDraft && draftMode) {
+    draftMode = false;
+    draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null;
+  }
+  document.getElementById('draft-bar').classList.toggle('active', isDraft);
+  document.getElementById('draft-sidebar').classList.toggle('visible', isDraft);
+  document.getElementById('rules-panel').style.display  = isInit  ? '' : 'none';
+  const hideMain = isBoard || isSaved || isInfo;
+  document.getElementById('main').style.display         = hideMain ? 'none' : 'flex';
+  document.getElementById('legend-row').style.display   = 'none';
+
+  document.getElementById('board-view').style.display   = isBoard ? 'flex' : 'none';
+  document.getElementById('saved-view').style.display   = isSaved ? 'flex' : 'none';
+  document.getElementById('info-view').style.display    = isInfo  ? 'block' : 'none';
+  if (isBoard) renderBoard();
+  else if (isSaved) { renderSavedPaths(); renderSavedViz(); }
+  else if (!isInfo) { renderAll(); renderPanel(currentNode !== null ? gNodes[currentNode] : null); }
+}
+
+// ── Saved Paths ───────────────────────────────────────────────────────────────
+
+function buildFullPath(rem) {
+  // rem is a ranked path starting from currentNode (rem.nodes[0] === currentNode).
+  // Prepend already-drafted nodes so the saved path covers all rounds.
+  // draftPath ends with currentNode, so slice off the last to avoid duplicating it.
+  const prefix   = draftMode && draftPath.length > 0 ? draftPath.slice(0, -1) : [];
+  const nodes    = prefix.concat(rem.nodes);
+  const edges    = nodes.slice(0, -1).map((src, i) => {
+    const tgt = nodes[i + 1];
+    return gEdges.findIndex(e => e.source === src && e.target === tgt);
+  });
+  const pastVal  = draftPickVals.reduce((s, v) => s + v, 0);
+  return { nodes, edges, val: pastVal + rem.val, simPath: rem };
+}
+
+function saveDraftPath() {
+  if (savedPaths.length >= 5 || !draftPath.length || !gNodes.length) return;
+  computeEdgeValues();
+  const top = rankPaths(1);
+  // Use best remaining path as projected future; fall back to just currentNode (draft complete)
+  const rem = top.length ? top[0] : { nodes: [draftPath[draftPath.length - 1]], val: 0 };
+  const { nodes, edges, val, simPath } = buildFullPath(rem);
+  savePath({ nodes, edges, val }, simPath);
+}
+
+function savePath(path, simPath = null) {
+  if (savedPaths.length >= 5 || !path || !gNodes.length) return;
+  computeEdgeValues();
+  // Picks for every node relative to its predecessor (from empty roster)
+  const picks = path.nodes.map((ni, j) => {
+    const cur = gNodes[ni].roster;
+    const prev = j === 0 ? [0, 0, 0, 0] : gNodes[path.nodes[j - 1]].roster;
+    return cur.findIndex((v, k) => v !== prev[k]);
+  });
+  const localFlex  = path.nodes.map(ni => gM.outDeg?.[ni] ?? 0);
+  const globalFlex = path.nodes.map(ni => gM.pathsOut?.[ni] ?? 0);
+  // Simulate only on the future portion (simPath) so already-made picks aren't re-randomised
+  const dist = playerData.length ? simulatePathDistribution(simPath ?? path, 1000) : { deltas: [], nonViablePct: 0 };
+  savedPaths.push({ nodes: path.nodes.slice(), picks, val: path.val, localFlex, globalFlex,
+                    deltas: dist.deltas, nonViablePct: dist.nonViablePct });
+}
+
+function renderSavedViz() {
+  const el = document.getElementById('saved-viz-inner');
+  if (!el) return;
+
+  if (!gNodes.length) {
+    el.innerHTML = '<div class="sv-viz-empty">Build the graph in Rule Initialization<br>to see the network here.</div>';
+    return;
+  }
+
+  const W = VW, H = getVH();
+
+  // Same radius + color scale as renderAll
+  const outDegs = gM.outDeg || [];
+  const maxOD   = Math.max(1, ...outDegs);
+  const SV_RMIN = 12, SV_RMAX = 30;
+  const nodeR   = i => SV_RMIN + (SV_RMAX - SV_RMIN) * ((outDegs[i] ?? 0) / maxOD);
+  const cs      = makeScale('pathsOut');
+  const vals    = gM.pathsOut || [];
+  const fmtVal  = METRICS.find(m => m.key === 'pathsOut')?.fmt ?? (v => v.toFixed(2));
+
+  // Which edges and nodes are on an active saved path
+  const activeEdgeSet = new Set(); // "src-tgt" keys
+  const nodeColors    = new Map(); // nodeIdx -> last-active-path color
+  for (const pi of savedPathVisible) {
+    const sp = savedPaths[pi];
+    if (!sp) continue;
+    const col = SAVED_PATH_COLORS[pi % SAVED_PATH_COLORS.length];
+    for (let j = 0; j < sp.nodes.length - 1; j++) {
+      activeEdgeSet.add(`${sp.nodes[j]}-${sp.nodes[j + 1]}`);
+    }
+    for (const ni of sp.nodes) nodeColors.set(ni, col);
+  }
+
+  // Edges — dim gray base, colored+thick for active path edges
+  let edgesHtml = '';
+  for (const e of gEdges) {
+    const s = gNodes[e.source], t = gNodes[e.target];
+    if (!s || !t) continue;
+    const key = `${e.source}-${e.target}`;
+    // Find which path color this edge belongs to (last active path wins)
+    let pathCol = null;
+    for (const pi of savedPathVisible) {
+      const sp = savedPaths[pi];
+      if (!sp) continue;
+      for (let j = 0; j < sp.nodes.length - 1; j++) {
+        if (sp.nodes[j] === e.source && sp.nodes[j + 1] === e.target)
+          pathCol = SAVED_PATH_COLORS[pi % SAVED_PATH_COLORS.length];
+      }
+    }
+    if (pathCol) {
+      edgesHtml += `<line x1="${s.x.toFixed(1)}" y1="${s.y.toFixed(1)}" x2="${t.x.toFixed(1)}" y2="${t.y.toFixed(1)}" stroke="${pathCol}" stroke-width="3.5" opacity="0.82"/>`;
+    } else {
+      edgesHtml += `<line x1="${s.x.toFixed(1)}" y1="${s.y.toFixed(1)}" x2="${t.x.toFixed(1)}" y2="${t.y.toFixed(1)}" stroke="#ccc" stroke-width="0.7"/>`;
+    }
+  }
+
+  // Nodes — identical appearance to main graph; path nodes get a colored thick stroke
+  let nodesHtml = '';
+  for (const nd of gNodes) {
+    const i    = nd.index;
+    const r    = nodeR(i);
+    const fill = cs(vals[i] ?? 0);
+    const txtC = labelColor(fill);
+    const valTxt = fmtVal(vals[i] ?? 0);
+    const onPath = nodeColors.has(i);
+    const stroke = onPath ? nodeColors.get(i) : '#666';
+    const sw     = onPath ? 3 : 0.8;
+
+    nodesHtml += `<g transform="translate(${nd.x.toFixed(1)},${nd.y.toFixed(1)})">` +
+      `<circle r="${r.toFixed(1)}" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>` +
+      `<text font-size="11" font-weight="700" font-family="'Courier New',monospace" ` +
+        `text-anchor="middle" dominant-baseline="central" fill="${txtC}">${nd.label}</text>` +
+      `<text x="0" y="${(-(r + 5)).toFixed(1)}" font-size="7.5" fill="#aaa" text-anchor="middle">${valTxt}</text>` +
+      `</g>`;
+  }
+
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">
+    ${edgesHtml}
+    ${nodesHtml}
+  </svg>`;
+}
+
+function renderSavedPaths() {
+  const el = document.getElementById('saved-content');
+  if (!el) return;
+  if (!savedPaths.length) {
+    el.innerHTML = '<p class="sv-empty">No saved paths yet. Select a path in the rankings and click "Save" to add it here for comparison.</p>';
+    renderSavedViz();
+    return;
+  }
+
+  const N = savedPaths.length;
+  const cols = N + 1;
+
+  // Inner nodes: exclude index 0 (root) and last (terminal)
+  const innerLF = savedPaths.map(sp => sp.localFlex.slice(1, -1));
+  const innerGF = savedPaths.map(sp => sp.globalFlex.slice(1, -1));
+
+  // Round labels from first path's inner nodes
+  const refInner = savedPaths[0].nodes.slice(1, -1);
+  const innerRounds = refInner.map(ni => gNodes[ni]?.round ?? '?');
+  const nInner = innerRounds.length;
+
+  function rowCls(values, higherIsBetter = true) {
+    const fin = values.filter(v => isFinite(v));
+    if (fin.length < 2) return values.map(() => 'sv-neutral');
+    const lo = Math.min(...fin), hi = Math.max(...fin);
+    if (lo === hi) return values.map(() => 'sv-neutral');
+    return values.map(v => {
+      if (!isFinite(v)) return 'sv-neutral';
+      const t = higherIsBetter ? (v - lo) / (hi - lo) : (hi - v) / (hi - lo);
+      return t >= 0.67 ? 'sv-good' : t >= 0.33 ? 'sv-ok' : 'sv-bad';
+    });
+  }
+
+  function fmt(v, decimals = 0) {
+    return isFinite(v) ? v.toFixed(decimals) : '—';
+  }
+
+  // Absolute cutoffs for local flex: 1=red, 2=yellow, >=3=green
+  function localCls(values) {
+    return values.map(v => {
+      if (!isFinite(v)) return 'sv-neutral';
+      if (v < 1.5) return 'sv-bad';
+      if (v < 2.5) return 'sv-ok';
+      return 'sv-good';
+    });
+  }
+
+  function dataRow(label, values, clss, fmtFn, labelClass = 'sv-slabel') {
+    let r = `<tr><td class="${labelClass}">${label}</td>`;
+    values.forEach((v, i) => { r += `<td class="${clss[i]}">${fmtFn(v)}</td>`; });
+    return r + '</tr>';
+  }
+
+  function section(label) {
+    return `<tr class="sv-section-row"><td colspan="${cols}">${label}</td></tr>`;
+  }
+
+  let html = '<table class="sv-table"><colgroup><col class="sv-label-col">';
+  for (let i = 0; i < N; i++) html += '<col class="sv-path-col">';
+  html += '</colgroup>';
+
+  // Header: colored dot + path number + checkbox + delete
+  html += '<thead><tr><th></th>';
+  savedPaths.forEach((sp, i) => {
+    const col = SAVED_PATH_COLORS[i % SAVED_PATH_COLORS.length];
+    const checked = savedPathVisible.has(i) ? ' checked' : '';
+    html += `<th style="white-space:nowrap">` +
+      `<span class="sv-col-dot" style="background:${col}"></span>` +
+      `Path ${i + 1}` +
+      ` <input type="checkbox" class="sv-viz-cb" data-si="${i}"${checked} style="--sv-col:${col}">` +
+      ` <button class="sv-del" data-si="${i}">×</button></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  // Total value row
+  {
+    const vals = savedPaths.map(sp => sp.val);
+    const clss = rowCls(vals, true);
+    html += '<tr><td class="sv-slabel">Total value</td>';
+    savedPaths.forEach((sp, i) => {
+      html += `<td class="sv-val-cell ${clss[i]}">${(sp.val >= 0 ? '+' : '') + sp.val.toFixed(1)}</td>`;
+    });
+    html += '</tr>';
+  }
+
+
+  if (nInner > 0) {
+    // Local Flex per inner round
+    html += section('Local Flexibility (per round)');
+    for (let r = 0; r < nInner; r++) {
+      const vals = innerLF.map(arr => arr[r] ?? NaN);
+      html += dataRow(`R${innerRounds[r]}`, vals, localCls(vals), v => fmt(v, 0), 'sv-rlabel');
+    }
+
+    // Global Flex per inner round (no rounding — normalized 0–1)
+    html += section('Global Flexibility (per round)');
+    for (let r = 0; r < nInner; r++) {
+      const vals = innerGF.map(arr => arr[r] ?? NaN);
+      html += dataRow(`R${innerRounds[r]}`, vals, rowCls(vals, true), v => fmt(v, 2), 'sv-rlabel');
+    }
+  }
+
+  html += section('Summary');
+
+  { // Weakest local
+    const vals = innerLF.map(arr => { const f = arr.filter(isFinite); return f.length ? Math.min(...f) : NaN; });
+    html += dataRow('Weakest local', vals, localCls(vals), v => fmt(v, 0));
+  }
+  { // Weakest global
+    const vals = innerGF.map(arr => { const f = arr.filter(isFinite); return f.length ? Math.min(...f) : NaN; });
+    html += dataRow('Weakest global', vals, rowCls(vals, true), v => fmt(v, 2));
+  }
+  { // Avg local
+    const vals = innerLF.map(arr => { const f = arr.filter(isFinite); return f.length ? f.reduce((s, v) => s + v, 0) / f.length : NaN; });
+    html += dataRow('Avg local', vals, localCls(vals), v => fmt(v, 1));
+  }
+  { // Avg global
+    const vals = innerGF.map(arr => { const f = arr.filter(isFinite); return f.length ? f.reduce((s, v) => s + v, 0) / f.length : NaN; });
+    html += dataRow('Avg global', vals, rowCls(vals, true), v => fmt(v, 2));
+  }
+  { // % non-viable (lower is better)
+    const vals = savedPaths.map(sp => sp.nonViablePct ?? NaN);
+    html += dataRow('% non-viable', vals, rowCls(vals, false), v => isFinite(v) ? v.toFixed(0) + '%' : '—');
+  }
+  { // Median delta (higher is better)
+    const vals = savedPaths.map(sp => {
+      if (!sp.deltas?.length) return NaN;
+      const s = [...sp.deltas].sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    });
+    html += dataRow('Med Δ', vals, rowCls(vals, true), v => isFinite(v) ? (v >= 0 ? '+' : '') + v.toFixed(1) : '—');
+  }
+
+  html += '</tbody></table>';
+
+  // Sequence table: rounds as rows, paths as columns
+  const nPicksMax = Math.max(...savedPaths.map(sp => sp.picks.length - 1));
+  let seqHtml = '<table class="sv-table sv-seq-table"><colgroup><col class="sv-label-col">';
+  for (let i = 0; i < N; i++) seqHtml += '<col class="sv-path-col">';
+  seqHtml += '</colgroup><thead><tr><th>Round</th>';
+  savedPaths.forEach((sp, i) => {
+    const col = SAVED_PATH_COLORS[i % SAVED_PATH_COLORS.length];
+    seqHtml += `<th><span class="sv-col-dot" style="background:${col}"></span>Path ${i + 1}</th>`;
+  });
+  seqHtml += '</tr></thead><tbody>';
+  for (let r = 0; r < nPicksMax; r++) {
+    seqHtml += `<tr><td class="sv-rlabel">R${r + 1}</td>`;
+    savedPaths.forEach(sp => {
+      const pos = sp.picks[r + 1] ?? -1;
+      if (pos >= 0) {
+        seqHtml += `<td style="color:${PICK_COLORS[pos]};font-weight:700">${POS[pos]}</td>`;
+      } else {
+        seqHtml += `<td class="sv-neutral">—</td>`;
+      }
+    });
+    seqHtml += '</tr>';
+  }
+  seqHtml += '</tbody></table>';
+
+  el.innerHTML = html + seqHtml;
+
+  // Checkbox: toggle overlay visibility
+  el.querySelectorAll('.sv-viz-cb').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) savedPathVisible.add(+cb.dataset.si);
+      else savedPathVisible.delete(+cb.dataset.si);
+      renderSavedViz();
+    });
+  });
+
+  // Delete: remove path, shift visible indices down
+  el.querySelectorAll('.sv-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const si = +btn.dataset.si;
+      savedPaths.splice(si, 1);
+      const next = new Set();
+      for (const idx of savedPathVisible) {
+        if (idx < si) next.add(idx);
+        else if (idx > si) next.add(idx - 1);
+      }
+      savedPathVisible = next;
+      renderSavedPaths();
+    });
+  });
+
+  renderSavedViz();
+}
+
+// ── Player Board ───────────────────────────────────────────────────────────────
+
+function saveTagsToStorage() {
+  try { localStorage.setItem('draftBoardTags', JSON.stringify(playerTags)); } catch(e) {}
+}
+function loadTagsFromStorage() {
+  try { const s = localStorage.getItem('draftBoardTags'); if (s) playerTags = JSON.parse(s); } catch(e) {}
+}
+
+function applyTag(adp, status) {
+  if (!playerTags[adp]) playerTags[adp] = {};
+  if (playerTags[adp].status === status) {
+    playerTags[adp].status = '';
+  } else {
+    playerTags[adp].status = status;
+    if (status === 'target') {
+      if (!playerTags[adp].priority)    playerTags[adp].priority   = 3;
+      if (!playerTags[adp].idealRound) {
+        const p = playerData.find(p => p.adp === adp);
+        playerTags[adp].idealRound = p ? p.adpRound : 1;
+      }
+    }
+  }
+  saveTagsToStorage();
+  renderBoard();
+  renderPathRankings(); // avoids affect BPA
+}
+
+function setTagProp(adp, key, val) {
+  if (!playerTags[adp]) playerTags[adp] = {};
+  playerTags[adp][key] = val;
+  saveTagsToStorage();
+}
+
+function getBoardFiltered() {
+  return playerData.filter(p => {
+    if (!boardFilters.pos.has(p.posStr)) return false;
+    const st = playerTags[p.adp]?.status || '';
+    if (boardFilters.status === 'target'   && st !== 'target')  return false;
+    if (boardFilters.status === 'avoid'    && st !== 'avoid')   return false;
+    if (boardFilters.status === 'untagged' && st !== '')        return false;
+    if (boardFilters.adpMin !== '' && p.adp < +boardFilters.adpMin) return false;
+    if (boardFilters.adpMax !== '' && p.adp > +boardFilters.adpMax) return false;
+    if (boardFilters.valMin !== '' && p.val < +boardFilters.valMin) return false;
+    if (boardFilters.valMax !== '' && p.val > +boardFilters.valMax) return false;
+    if (boardFilters.search && !p.name.toLowerCase().includes(boardFilters.search)) return false;
+    return true;
+  }).sort((a, b) => {
+    const col = boardSort.col;
+    const tagA = playerTags[a.adp] || {}, tagB = playerTags[b.adp] || {};
+    const vals = {
+      name: [a.name, b.name], pos: [a.posStr, b.posStr], team: [a.team, b.team],
+      adp: [a.adp, b.adp], val: [a.val, b.val], bye: [a.bye, b.bye],
+      status:    [tagA.status || '', tagB.status || ''],
+      priority:  [tagA.priority  || 0, tagB.priority  || 0],
+      idealRound:[tagA.idealRound || a.adpRound, tagB.idealRound || b.adpRound],
+    };
+    const [va, vb] = vals[col] || [0, 0];
+    if (va < vb) return -boardSort.dir;
+    if (va > vb) return  boardSort.dir;
+    return a.adp - b.adp; // stable tiebreak
+  });
+}
+
+function renderBoard() {
+  const players = getBoardFiltered();
+  const el = document.getElementById('board-count');
+  if (el) el.textContent = `${players.length} of ${playerData.length} players`;
+
+  // Update header sort indicators
+  document.querySelectorAll('#board-thead th[data-col]').forEach(th => {
+    const col = th.dataset.col;
+    const active = boardSort.col === col;
+    th.classList.toggle('bth-active', active);
+    const icon = active ? (boardSort.dir === 1 ? ' ↑' : ' ↓') : '';
+    th.textContent = th.textContent.replace(/ [↑↓]$/, '') + icon;
+  });
+
+  const tbody = document.getElementById('board-tbody');
+  if (!tbody) return;
+
+  if (!players.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="board-empty">No players match filters</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = players.map(p => {
+    const tag = playerTags[p.adp] || {};
+    const status = tag.status || '';
+    const isTarget = status === 'target';
+    const isAvoid  = status === 'avoid';
+    const rowClass = isTarget ? 'board-row target-row' : isAvoid ? 'board-row avoid-row' : 'board-row';
+    const posColor = PICK_COLORS[p.pos] ?? '#666';
+    const priority = tag.priority ?? 3;
+    const idealRound = tag.idealRound ?? p.adpRound;
+
+    const stars = isTarget
+      ? Array.from({length: 5}, (_, i) =>
+          `<span class="star${i < priority ? ' filled' : ''}" data-n="${i}" data-adp="${p.adp}">★</span>`
+        ).join('')
+      : '<span class="star-empty">—</span>';
+
+    const idealRoundCell = isTarget
+      ? `<input type="number" class="ideal-rd-in" value="${idealRound}" min="1" max="16" data-adp="${p.adp}">`
+      : `<span class="td-muted">${p.adpRound}</span>`;
+
+    return `<tr class="${rowClass}">
+      <td><span class="player-name">${p.name}</span></td>
+      <td><span class="pos-badge" style="color:${posColor}">${p.posStr}</span></td>
+      <td>${p.team}</td>
+      <td class="td-num">${p.adp}</td>
+      <td class="td-num${p.val < 0 ? ' td-neg' : ''}">${p.val.toFixed(1)}</td>
+      <td class="td-num">${p.bye}</td>
+      <td class="td-tag">
+        <button class="tag-btn target-btn${isTarget ? ' on' : ''}" data-status="target" data-adp="${p.adp}">★</button>
+        <button class="tag-btn avoid-btn${isAvoid  ? ' on' : ''}" data-status="avoid"  data-adp="${p.adp}">✗</button>
+      </td>
+      <td>${idealRoundCell}</td>
+      <td class="td-stars">${stars}</td>
+    </tr>`;
+  }).join('');
+
+  // Bind row-level events
+  tbody.querySelectorAll('.tag-btn').forEach(btn =>
+    btn.addEventListener('click', () => applyTag(+btn.dataset.adp, btn.dataset.status))
+  );
+  tbody.querySelectorAll('.star[data-adp]').forEach(s =>
+    s.addEventListener('click', () => { setTagProp(+s.dataset.adp, 'priority', +s.dataset.n + 1); renderBoard(); })
+  );
+  tbody.querySelectorAll('.ideal-rd-in').forEach(inp =>
+    inp.addEventListener('change', () => {
+      const v = Math.max(1, Math.min(16, +inp.value || 1));
+      inp.value = v;
+      setTagProp(+inp.dataset.adp, 'idealRound', v);
+    })
+  );
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+loadRankings();
+loadTagsFromStorage();
+
+// Tab switching
+document.getElementById('tab-init-btn').addEventListener('click',  () => switchTab('init'));
+document.getElementById('tab-draft-btn').addEventListener('click', () => switchTab('draft'));
+document.getElementById('tab-board-btn').addEventListener('click', () => switchTab('board'));
+document.getElementById('tab-saved-btn').addEventListener('click', () => switchTab('saved'));
+document.getElementById('tab-info-btn').addEventListener('click',  () => switchTab('info'));
+
+// Board: column sort
+document.getElementById('board-thead').addEventListener('click', e => {
+  const th = e.target.closest('[data-col]');
+  if (!th) return;
+  const col = th.dataset.col;
+  boardSort.dir = boardSort.col === col ? -boardSort.dir : 1;
+  boardSort.col = col;
+  renderBoard();
+});
+
+// Board: search
+document.getElementById('board-search').addEventListener('input', e => {
+  boardFilters.search = e.target.value.trim().toLowerCase();
+  renderBoard();
+});
+
+// Board: position checkboxes
+document.querySelectorAll('.pos-filter-cb').forEach(cb => {
+  cb.addEventListener('change', () => {
+    boardFilters.pos = new Set([...document.querySelectorAll('.pos-filter-cb:checked')].map(c => c.value));
+    renderBoard();
+  });
+});
+
+// Board: status filter
+document.querySelectorAll('.sfbtn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.sfbtn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    boardFilters.status = btn.dataset.sf;
+    renderBoard();
+  });
+});
+
+// Board: ADP/VAL range filters
+['adp-min','adp-max','val-min-f','val-max-f'].forEach(id => {
+  document.getElementById(id).addEventListener('input', e => {
+    if (id === 'adp-min') boardFilters.adpMin = e.target.value;
+    if (id === 'adp-max') boardFilters.adpMax = e.target.value;
+    if (id === 'val-min-f') boardFilters.valMin = e.target.value;
+    if (id === 'val-max-f') boardFilters.valMax = e.target.value;
+    renderBoard();
+  });
+});
+
+// Board: batch operations
+document.getElementById('target-visible-btn').addEventListener('click', () => {
+  getBoardFiltered().forEach(p => {
+    if (!playerTags[p.adp]) playerTags[p.adp] = {};
+    if (playerTags[p.adp].status !== 'target') {
+      playerTags[p.adp].status = 'target';
+      if (!playerTags[p.adp].priority)    playerTags[p.adp].priority   = 3;
+      if (!playerTags[p.adp].idealRound)  playerTags[p.adp].idealRound = p.adpRound;
+    }
+  });
+  saveTagsToStorage();
+  renderBoard();
+});
+document.getElementById('clear-targets-btn').addEventListener('click', () => {
+  Object.keys(playerTags).forEach(k => { if (playerTags[k].status === 'target') playerTags[k].status = ''; });
+  saveTagsToStorage(); renderBoard(); renderPathRankings();
+});
+document.getElementById('clear-avoids-btn').addEventListener('click', () => {
+  Object.keys(playerTags).forEach(k => { if (playerTags[k].status === 'avoid') playerTags[k].status = ''; });
+  saveTagsToStorage(); renderBoard(); renderPathRankings();
+});
+document.getElementById('clear-all-tags-btn').addEventListener('click', () => {
+  playerTags = {}; saveTagsToStorage(); renderBoard(); renderPathRankings();
+});
+
+// Board: export/import
+document.getElementById('export-tags-btn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(playerTags, null, 2)], { type: 'application/json' });
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'draft-board.json' });
+  a.click(); URL.revokeObjectURL(a.href);
+});
+document.getElementById('import-tags-in').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try { playerTags = JSON.parse(ev.target.result); saveTagsToStorage(); renderBoard(); renderPathRankings(); }
+    catch(err) { alert('Invalid JSON file'); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+rules = defaultRules();
+renderRulesList();
+renderExcluded();
+applyGraph(applyExclusions(buildNetwork(rules)));
+
+document.getElementById('slot-in').addEventListener('change', e => {
+  draftSlot = Math.max(1, Math.min(24, +e.target.value || 1));
+  e.target.value = draftSlot;
+  renderPathRankings();
+});
+document.getElementById('size-in').addEventListener('change', e => {
+  leagueSize = Math.max(4, Math.min(24, +e.target.value || 12));
+  e.target.value = leagueSize;
+  renderPathRankings();
+});
+
+function setBpaMode(mode) {
+  bpaMode = mode;
+  document.getElementById('bpa-strict').classList.toggle('active', mode === 'strict');
+  document.getElementById('bpa-range').classList.toggle('active', mode === 'range');
+  document.getElementById('range-inputs').style.display = mode === 'range' ? 'flex' : 'none';
+  renderPathRankings();
+}
+document.getElementById('bpa-strict').addEventListener('click', () => setBpaMode('strict'));
+document.getElementById('bpa-range').addEventListener('click',  () => setBpaMode('range'));
+
+document.getElementById('range-before').addEventListener('change', e => {
+  rangeBefore = Math.max(0, +e.target.value || 0);
+  e.target.value = rangeBefore;
+  if (bpaMode === 'range') renderPathRankings();
+});
+document.getElementById('range-after').addEventListener('change', e => {
+  rangeAfter = Math.max(0, +e.target.value || 0);
+  e.target.value = rangeAfter;
+  if (bpaMode === 'range') renderPathRankings();
+});
+
+</script>
+</body>
+</html>
