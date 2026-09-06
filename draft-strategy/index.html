@@ -6,6 +6,7 @@
 <title>Fantasy Draft Strategy Network</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 body { background: #fafafa; color: #222; font-family: 'Segoe UI', system-ui, sans-serif; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
 /* Header */
@@ -320,6 +321,27 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
 .sv-neutral { color: #444;    font-weight: 700; }
 .sv-seq-table { margin-top: 14px; }
 
+/* ─── Live draft bar ─────────────────────────────────────────────────────── */
+#live-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 5px 16px; background: #fff7ed; border-bottom: 1px solid #fed7aa; font-size: 0.76rem; color: #7c2d12; flex-shrink: 0; }
+#live-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+#live-dot.live-on  { background: #16a34a; box-shadow: 0 0 0 3px #16a34a22; }
+#live-dot.live-off { background: #cbd5e1; }
+#live-status { font-weight: 700; }
+#live-info { color: #9a5b3b; font-variant-numeric: tabular-nums; }
+#live-warn { color: #b91c1c; font-weight: 600; width: 100%; }
+#live-warn:empty { display: none; }
+.live-btn { padding: 2px 9px; border: 1px solid #fdba74; background: #fff; color: #9a3412; border-radius: 3px; cursor: pointer; font-size: 0.72rem; white-space: nowrap; }
+.live-btn:hover { background: #ffedd5; }
+#live-manual { width: 100%; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; padding-top: 4px; }
+#live-manual-text { flex: 1; min-width: 180px; height: 44px; font-size: 0.72rem; border: 1px solid #fdba74; border-radius: 3px; padding: 4px 6px; resize: vertical; font-family: inherit; }
+#live-manual-result { color: #9a5b3b; }
+#live-toggle-btn { margin-left: auto; padding: 3px 10px; border: 1px solid #fdba74; background: #fff7ed; color: #9a3412; border-radius: 3px; cursor: pointer; font-size: 0.76rem; white-space: nowrap; }
+#live-toggle-btn.on { background: #ea580c; color: #fff; border-color: #ea580c; }
+/* Drafted players on the board */
+.board-row.drafted-row td { background: #f4f4f5; }
+.board-row.drafted-row .player-name { text-decoration: line-through; color: #9ca3af; }
+.drafted-badge { font-size: 0.6rem; font-weight: 700; color: #6b7280; background: #e5e7eb; border-radius: 2px; padding: 1px 4px; letter-spacing: 0.03em; margin-right: 4px; }
+
 /* ─── Mobile / narrow-viewport support ──────────────────────────────────────
    Everything below is scoped to narrow screens only. The desktop layout above
    is left completely untouched, so the site's appearance on the web is
@@ -381,6 +403,24 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
 
 <div id="header">
   <h1>Draft Strategy Network</h1>
+  <button id="live-toggle-btn">⚡ Live</button>
+</div>
+
+<div id="live-bar" hidden>
+  <span id="live-dot" class="live-off"></span>
+  <span id="live-status">Live draft</span>
+  <span id="live-info"></span>
+  <button class="live-btn" id="live-start-btn">▶ Start</button>
+  <button class="live-btn" id="live-pause-btn" hidden>Pause</button>
+  <button class="live-btn" id="live-manual-btn">Paste picks</button>
+  <button class="live-btn" id="live-exit-btn" hidden>Exit</button>
+  <span id="live-warn"></span>
+  <div id="live-manual" hidden>
+    <textarea id="live-manual-text" placeholder="Paste drafted players — one per line or comma-separated"></textarea>
+    <button class="live-btn" id="live-manual-apply">Apply</button>
+    <button class="live-btn" id="live-manual-clear">Clear drafted</button>
+    <span id="live-manual-result"></span>
+  </div>
 </div>
 
 <div id="tab-bar">
@@ -544,6 +584,7 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
         <button class="sfbtn" data-sf="avoid">Avoids</button>
         <button class="sfbtn" data-sf="untagged">Untagged</button>
       </div>
+      <label class="pos-cb" id="hide-drafted-wrap" style="display:none"><input type="checkbox" id="hide-drafted-cb"> Hide drafted</label>
       <span class="btb-sep"></span>
       <span id="board-count"></span>
     </div>
@@ -606,6 +647,7 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
     <a href="#info-measures">Measures explained</a>
     <a href="#info-options">Customizable options</a>
     <a href="#info-usecases">Use-case examples</a>
+    <a href="#info-live">Live draft mode (ESPN mocks)</a>
   </div>
 
   <!-- ── CORE CONCEPT ──────────────────────────────────────────────────────── -->
@@ -805,6 +847,25 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
   </div>
   <div class="info-callout warn">
     <strong>Note on player data:</strong> path values depend on the rankings CSV loaded in the Player Board. Re-import updated rankings after injury news or ADP shifts; target and avoid tags persist across re-imports.
+  </div>
+
+  <!-- ── LIVE DRAFT ─────────────────────────────────────────────────────────── -->
+  <h2 id="info-live">Live draft mode (ESPN mocks)</h2>
+  <p>The <strong>⚡ Live</strong> button (top-right) tracks a real draft as it happens: every player taken by anyone drops out of every BPA pool, path values and rankings recompute, and — if the feed knows pick order — your own picks auto-advance the Draft Mode path. The NV% / median-Δ simulation is switched off while live so each recompute stays fast.</p>
+  <h3>Two ways to feed it</h3>
+  <ul>
+    <li><strong>ESPN bridge userscript</strong> — install <code>espn-mock-bridge.user.js</code> (see <code>LIVE-DRAFT.md</code> in the repo) in Tampermonkey. It runs on the ESPN draft room, captures picks, and forwards them here automatically. Set your draft slot in its little panel to your position in that mock.</li>
+    <li><strong>Paste picks</strong> — no install needed. Click <strong>⚡ Live → Paste picks</strong>, paste the drafted players (one per line or comma-separated), and hit Apply. Re-paste the growing list whenever you want to refresh. Works for any platform, not just ESPN.</li>
+  </ul>
+  <h3>What to check</h3>
+  <ul>
+    <li>Set <strong>Draft slot</strong> and <strong>League size</strong> (Rule Initialization) to match the mock — the tool uses them to work out which picks are yours.</li>
+    <li>The live bar shows <strong>unmatched</strong> picks — names that didn't map to the rankings CSV (rookies, odd spellings). Those players are <em>not</em> removed from the pool, so path values will be slightly optimistic until you tag them Avoid by hand.</li>
+    <li>A <strong>"left the modeled graph"</strong> warning means your live roster followed a sequence your current rules forbid — relax the offending rule to keep the projection meaningful.</li>
+    <li><strong>Pause</strong> freezes updates without losing state; <strong>Exit</strong> clears the live draft. A refresh mid-draft is safe — the drafted set is restored from local storage.</li>
+  </ul>
+  <div class="info-callout warn">
+    <strong>Limits:</strong> ESPN mock drafts run fast — use the live view to glance at refreshed top paths between your picks, not to re-plan every pick. The bridge reads ESPN's unofficial draft feed and can break when ESPN ships changes; the Paste picks box is the always-works fallback. Player <em>values</em> are still the CSV snapshot — only <em>availability</em> becomes live.
   </div>
 </div>
 </div>
@@ -1021,7 +1082,26 @@ let rankHighlight = null;     // { pathIdx, nodeSet, edgeSet }
 let activeTab     = 'info';
 let boardSort     = { col: 'adp', dir: 1 };
 let boardFilters  = { pos: new Set(['RB','WR','TE','QB']), status: 'all',
-                      adpMin:'', adpMax:'', valMin:'', valMax:'', search:'' };
+                      adpMin:'', adpMax:'', valMin:'', valMax:'', search:'', hideDrafted: false };
+
+// ── Live draft state (ESPN mock bridge) ──────────────────────────────────────
+let liveMode      = false;   // live-draft tracking active
+let livePaused    = false;   // feed received but not applied
+let liveConnected = false;   // at least one bridge message seen this session
+let liveAutoPath  = false;   // feed provides ordered picks → auto-advance my Draft Mode path
+let liveDrafted   = new Set();       // adp values of players taken by anyone
+let liveMyPicksAdp = [];             // adp values I drafted, in pick order
+let liveLastPick  = 0;               // highest overall pick number seen
+let liveMySlot    = null;            // draft slot reported by the feed (falls back to slot-in)
+let liveUnmatched = [];              // [{name,pos,team}] picks that didn't map to a CSV player
+let liveOffGraph  = false;           // my live roster sequence isn't a node in the current graph
+let lastLiveState = null;            // most recent raw bridge payload
+let liveRecomputeTimer = null;
+
+// A player is out of the pool if the user tagged them "avoid" or they've been drafted live.
+function poolExcluded(p) {
+  return playerTags[p.adp]?.status === 'avoid' || liveDrafted.has(p.adp);
+}
 
 // ── Mutable graph state ───────────────────────────────────────────────────────
 
@@ -1767,7 +1847,7 @@ function renderDraftSidebar() {
   const zClass = { target: 'avt', drop: 'avd', reach: 'avr' };
 
   const available = playerData
-    .filter(p => playerTags[p.adp]?.status !== 'avoid' && zone(p) !== null);
+    .filter(p => !poolExcluded(p) && zone(p) !== null);
 
   const validPicks = getValidPicks();
 
@@ -1836,7 +1916,7 @@ function snakePick(slot, size, round) {
 }
 
 function bpaFilter(pos, pick) {
-  const pool = playerData.filter(p => p.pos === pos && playerTags[p.adp]?.status !== 'avoid');
+  const pool = playerData.filter(p => p.pos === pos && !poolExcluded(p));
   if (bpaMode === 'strict') return pool.filter(p => p.adp >= pick);
   return pool.filter(p => p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
 }
@@ -1987,7 +2067,7 @@ function simulatePathDistribution(path, N = 1000) {
   // Pre-compute candidate pool + ADP weights once per pick
   const pickSlots = futurePicks.map(({ pos, round }) => {
     const pick = snakePick(draftSlot, leagueSize, round);
-    const pool = playerData.filter(p => p.pos === pos && playerTags[p.adp]?.status !== 'avoid');
+    const pool = playerData.filter(p => p.pos === pos && !poolExcluded(p));
     const inWindow   = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
     const randWindow = p => p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter;
     const tPool = pool.filter(p => playerTags[p.adp]?.status === 'target' && randWindow(p));
@@ -2055,7 +2135,7 @@ function renderLineupPanel(path) {
     pastPicks.forEach(pp => {
       if (pp.player || pp.pos < 0) return;
       const pick = snakePick(draftSlot, leagueSize, pp.round);
-      const pool = playerData.filter(p => p.pos === pp.pos && playerTags[p.adp]?.status !== 'avoid');
+      const pool = playerData.filter(p => p.pos === pp.pos && !poolExcluded(p));
       const inW  = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
       const bpaPool = pool.filter(inW).sort((a, b) => b.val - a.val);
       pp.player = bpaPool[0] ?? null; pp.source = 'bpa';
@@ -2078,7 +2158,7 @@ function renderLineupPanel(path) {
     const isRolled = lineupRerollCount > 0;
     futurePicks.forEach(fp => {
       const pick = snakePick(draftSlot, leagueSize, fp.round);
-      const pool = playerData.filter(p => p.pos === fp.pos && !usedAdps.has(p.adp) && playerTags[p.adp]?.status !== 'avoid');
+      const pool = playerData.filter(p => p.pos === fp.pos && !usedAdps.has(p.adp) && !poolExcluded(p));
       const isTarget   = p => playerTags[p.adp]?.status === 'target';
       const tPriority  = p => playerTags[p.adp]?.priority ?? 0;
       const inWindow   = p => bpaMode === 'strict' ? p.adp >= pick : (p.adp >= pick - rangeBefore && p.adp <= pick + rangeAfter);
@@ -2276,7 +2356,9 @@ function renderPathRankings() {
   function getCachedDist(p) {
     const key = p.nodes.join(',');
     if (!simCache.has(key)) {
-      simCache.set(key, playerData.length
+      // NV% / median-Δ simulation is skipped in live mode — it's the slow step and
+      // the per-pick recompute needs to stay snappy during a real draft.
+      simCache.set(key, (playerData.length && !liveMode)
         ? simulatePathDistribution(p, 1000)
         : { deltas: [], nonViablePct: 0 });
     }
@@ -2616,7 +2698,10 @@ function switchTab(tab) {
     selectedNodes.clear();
   } else if (!isDraft && draftMode) {
     draftMode = false;
-    draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null;
+    // In live mode the drafted path is owned by the ESPN feed — keep it across tab switches.
+    if (!liveMode) {
+      draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = []; draftBestRemaining = []; initialBestVal = null;
+    }
   }
   document.getElementById('draft-bar').classList.toggle('active', isDraft);
   document.getElementById('draft-sidebar').classList.toggle('visible', isDraft);
@@ -2630,7 +2715,13 @@ function switchTab(tab) {
   document.getElementById('info-view').style.display    = isInfo  ? 'block' : 'none';
   if (isBoard) renderBoard();
   else if (isSaved) { renderSavedPaths(); renderSavedViz(); }
-  else if (!isInfo) { renderAll(); renderPanel(currentNode !== null ? gNodes[currentNode] : null); }
+  else if (!isInfo) {
+    if (isDraft && liveMode && liveAutoPath) syncLiveDraftPath();
+    renderAll();
+    renderPanel(currentNode !== null ? gNodes[currentNode] : null);
+    if (isDraft && liveMode) renderPathRankings();
+  }
+  renderLiveBar();
 }
 
 // ── Saved Paths ───────────────────────────────────────────────────────────────
@@ -2671,7 +2762,7 @@ function savePath(path, simPath = null) {
   const localFlex  = path.nodes.map(ni => gM.outDeg?.[ni] ?? 0);
   const globalFlex = path.nodes.map(ni => gM.pathsOut?.[ni] ?? 0);
   // Simulate only on the future portion (simPath) so already-made picks aren't re-randomised
-  const dist = playerData.length ? simulatePathDistribution(simPath ?? path, 1000) : { deltas: [], nonViablePct: 0 };
+  const dist = (playerData.length && !liveMode) ? simulatePathDistribution(simPath ?? path, 1000) : { deltas: [], nonViablePct: 0 };
   savedPaths.push({ nodes: path.nodes.slice(), picks, val: path.val, localFlex, globalFlex,
                     deltas: dist.deltas, nonViablePct: dist.nonViablePct });
 }
@@ -2992,6 +3083,7 @@ function getBoardFiltered() {
     if (boardFilters.valMin !== '' && p.val < +boardFilters.valMin) return false;
     if (boardFilters.valMax !== '' && p.val > +boardFilters.valMax) return false;
     if (boardFilters.search && !p.name.toLowerCase().includes(boardFilters.search)) return false;
+    if (boardFilters.hideDrafted && liveDrafted.has(p.adp)) return false;
     return true;
   }).sort((a, b) => {
     const col = boardSort.col;
@@ -3037,7 +3129,9 @@ function renderBoard() {
     const status = tag.status || '';
     const isTarget = status === 'target';
     const isAvoid  = status === 'avoid';
-    const rowClass = isTarget ? 'board-row target-row' : isAvoid ? 'board-row avoid-row' : 'board-row';
+    const isDrafted = liveMode && liveDrafted.has(p.adp);
+    const rowClass = (isTarget ? 'board-row target-row' : isAvoid ? 'board-row avoid-row' : 'board-row')
+                     + (isDrafted ? ' drafted-row' : '');
     const posColor = PICK_COLORS[p.pos] ?? '#666';
     const priority = tag.priority ?? 3;
     const idealRound = tag.idealRound ?? p.adpRound;
@@ -3053,7 +3147,7 @@ function renderBoard() {
       : `<span class="td-muted">${p.adpRound}</span>`;
 
     return `<tr class="${rowClass}">
-      <td><span class="player-name">${p.name}</span></td>
+      <td>${isDrafted ? '<span class="drafted-badge">DRAFTED</span>' : ''}<span class="player-name">${p.name}</span></td>
       <td><span class="pos-badge" style="color:${posColor}">${p.posStr}</span></td>
       <td>${p.team}</td>
       <td class="td-num">${p.adp}</td>
@@ -3087,7 +3181,9 @@ function renderBoard() {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 loadRankings();
+buildLiveNameIndex();
 loadTagsFromStorage();
+restoreLive();
 
 // Tab switching
 document.getElementById('tab-init-btn').addEventListener('click',  () => switchTab('init'));
@@ -3220,6 +3316,320 @@ document.getElementById('range-after').addEventListener('change', e => {
   e.target.value = rangeAfter;
   if (bpaMode === 'range') renderPathRankings();
 });
+
+// ── Live draft (ESPN mock bridge) ────────────────────────────────────────────
+//
+// A companion Tampermonkey userscript (draft-strategy/espn-mock-bridge.user.js)
+// runs on the ESPN draft room, captures each pick, and re-broadcasts it into
+// this page as `window.postMessage({ source: 'espn-mock-bridge', state })`.
+// `state.picks` is [{ overall, name, pos, team }]. This page maps those names to
+// the embedded rankings, marks them drafted (removed from every BPA pool), and —
+// when picks carry an `overall` number — auto-advances the Draft Mode path for
+// the picks that fall on the user's slot. NV% simulation is disabled while live.
+//
+// Everything also works without the userscript via the "Paste picks" box.
+
+function normLiveName(s) {
+  return (s || '').toLowerCase()
+    .replace(/[.'`’]/g, '')
+    .replace(/\s+(jr|sr|ii|iii|iv|v)\b/g, '')
+    .replace(/[^a-z ]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+
+let liveNameIndex = new Map();
+// Hand-fix any ESPN spellings that don't normalise to a CSV name: normalised name → adp
+const LIVE_NAME_OVERRIDES = {};
+
+function buildLiveNameIndex() {
+  liveNameIndex = new Map();
+  playerData.forEach(p => {
+    const n = normLiveName(p.name);
+    if (!liveNameIndex.has(n)) liveNameIndex.set(n, p);
+    liveNameIndex.set(n + '|' + p.posStr, p);
+  });
+}
+
+function matchLivePlayer(name, pos, team) {
+  const n = normLiveName(name);
+  if (!n) return null;
+  if (LIVE_NAME_OVERRIDES[n] != null) return playerData.find(p => p.adp === LIVE_NAME_OVERRIDES[n]) || null;
+  pos = (pos || '').toUpperCase();
+  team = (team || '').toUpperCase();
+  return liveNameIndex.get(n + '|' + pos)
+      || liveNameIndex.get(n)
+      || (pos && team && playerData.find(p => p.posStr === pos && p.team === team
+            && normLiveName(p.name).split(' ').pop() === n.split(' ').pop()))
+      || null;
+}
+
+function persistLive() {
+  try {
+    localStorage.setItem('liveDraftState', JSON.stringify({
+      mode: liveMode, drafted: [...liveDrafted], myPicks: liveMyPicksAdp,
+      lastPick: liveLastPick, mySlot: liveMySlot, autoPath: liveAutoPath
+    }));
+  } catch (e) {}
+}
+
+function restoreLive() {
+  try {
+    const s = JSON.parse(localStorage.getItem('liveDraftState') || 'null');
+    if (!s || !s.mode) return;
+    liveMode = true;
+    liveDrafted = new Set(s.drafted || []);
+    liveMyPicksAdp = s.myPicks || [];
+    liveLastPick = s.lastPick || 0;
+    liveMySlot = s.mySlot || null;
+    liveAutoPath = !!s.autoPath || liveMyPicksAdp.length > 0;
+    if (liveMySlot) draftSlot = Math.max(1, Math.min(24, liveMySlot));
+  } catch (e) {}
+}
+
+// Rebuild Draft Mode's path from the players the feed says I drafted.
+function syncLiveDraftPath() {
+  if (!liveMode || !gNodes.length) return;
+  draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = [];
+  draftBestRemaining = []; initialBestVal = null;
+  liveOffGraph = false;
+  const mine = liveMyPicksAdp.map(adp => playerData.find(p => p.adp === adp)).filter(Boolean);
+  for (const pl of mine) {
+    if (isDraftComplete()) break;
+    const next = findNextNode(pl.pos);
+    if (next < 0) { liveOffGraph = true; break; }
+    if (initialBestVal === null && playerData.length) {
+      computeEdgeValues();
+      const bp = rankPaths(1);
+      initialBestVal = bp.length ? bp[0].val : 0;
+    }
+    draftPath.push(next); currentNode = next;
+    draftPickVals.push(pl.val);
+    draftPickedPlayers.push(pl);
+    if (playerData.length) draftBestRemaining.push(bestRemainingVal(currentNode));
+  }
+}
+
+function scheduleLiveRecompute() {
+  clearTimeout(liveRecomputeTimer);
+  liveRecomputeTimer = setTimeout(runLiveRecompute, 450);
+}
+
+function runLiveRecompute() {
+  rankHighlight = null;
+  if (activeTab === 'draft') {
+    if (liveAutoPath) syncLiveDraftPath();
+    renderAll();
+    renderPanel(currentNode !== null ? gNodes[currentNode] : null);
+    renderPathRankings();
+  } else if (activeTab === 'board') {
+    renderBoard();
+  } else if (activeTab === 'init') {
+    renderAll();
+    renderPathRankings();
+  }
+  renderLiveBar();
+}
+
+function applyLiveState(state) {
+  lastLiveState = state;
+  liveConnected = true;
+  if (!liveMode || livePaused) { renderLiveBar(); return; }
+
+  if (state.leagueSize >= 4 && state.leagueSize <= 24) {
+    leagueSize = state.leagueSize;
+    const si = document.getElementById('size-in'); if (si) si.value = leagueSize;
+  }
+  if (state.mySlot >= 1 && state.mySlot <= 24) {
+    liveMySlot = state.mySlot;
+    draftSlot = state.mySlot;
+    const sl = document.getElementById('slot-in'); if (sl) sl.value = draftSlot;
+  }
+
+  const picks = state.picks || [];
+  const hasOverall = picks.some(p => p.overall > 0);
+  liveAutoPath = hasOverall;
+
+  // Which overall pick numbers are mine, in a snake draft
+  const myOveralls = new Set();
+  if (hasOverall) {
+    for (let r = 1; r <= maxRound; r++) myOveralls.add(snakePick(draftSlot, leagueSize, r));
+  }
+
+  const drafted = new Set();
+  const mine = [];
+  liveUnmatched = [];
+  picks.forEach(pk => {
+    const pos = (pk.pos || '').toUpperCase();
+    const pl = matchLivePlayer(pk.name, pos, pk.team);
+    if (pl) {
+      drafted.add(pl.adp);
+      if (hasOverall && myOveralls.has(pk.overall)) mine.push({ ord: pk.overall, adp: pl.adp });
+    } else if (['RB', 'WR', 'TE', 'QB'].includes(pos)) {
+      liveUnmatched.push(pk);
+    }
+  });
+  liveDrafted = drafted;
+  liveMyPicksAdp = mine.sort((a, b) => a.ord - b.ord).map(x => x.adp);
+  liveLastPick = picks.reduce((m, p) => Math.max(m, p.overall || 0), 0);
+  if (liveUnmatched.length) console.warn('[live] unmatched picks:', liveUnmatched);
+
+  persistLive();
+  scheduleLiveRecompute();
+}
+
+const TEAM_ABBRS = /\s+(ARI|ATL|BAL|BUF|CAR|CHI|CIN|CLE|DAL|DEN|DET|GB|HOU|IND|JAX|KC|LV|LAC|LAR|MIA|MIN|NE|NO|NYG|NYJ|PHI|PIT|SEA|SF|TB|TEN|WSH|WAS)$/i;
+function cleanManualLine(line) {
+  let s = line.replace(/\(.*?\)/g, ' ')                 // "(BUF)", "(Bye 12)"
+              .replace(/\b(round|pick|r\d+|#\d+)\b.*/i, ' ')
+              .split(/\s[-–|]\s/)[0]                     // "Name - TEAM"
+              .replace(/^\s*\d+[.)]\s*/, '')             // "12. Name"
+              .trim();
+  s = s.replace(/^(QB|RB|WR|TE|K|DEF|DST|D\/ST|FLEX|BE|BN|IR)\s+/i, '');
+  // strip trailing "TEAM" and "POS" tokens (either order), e.g. "Bijan Robinson RB ATL"
+  for (let i = 0; i < 3; i++) {
+    const t = s.replace(TEAM_ABBRS, '').replace(/\s+(QB|RB|WR|TE|K|DEF|DST|D\/ST)$/i, '').trim();
+    if (t === s) break;
+    s = t;
+  }
+  return s.trim();
+}
+
+function applyManualPicks(text) {
+  // One player per line is the common paste (ESPN pick history). Fall back to
+  // comma-splitting only when the text is a single line.
+  const splitter = /[\n;]/.test(text.trim()) ? /[\n;]+/ : /[\n;,]+/;
+  const names = text.split(splitter).map(cleanManualLine).filter(Boolean);
+  const drafted = new Set(liveDrafted);
+  liveUnmatched = [];
+  let matched = 0;
+  names.forEach(nm => {
+    const pl = matchLivePlayer(nm, '', '');
+    if (pl) { drafted.add(pl.adp); matched++; }
+    else liveUnmatched.push({ name: nm, pos: '', team: '' });
+  });
+  liveDrafted = drafted;
+  liveAutoPath = false;  // paste mode: user still drives Draft Mode by hand
+  persistLive();
+  runLiveRecompute();
+  return { matched, total: names.length };
+}
+
+function enterLiveMode() {
+  liveMode = true; livePaused = false; liveAutoPath = false;
+  liveDrafted = new Set(); liveMyPicksAdp = []; liveOffGraph = false; liveUnmatched = [];
+  document.getElementById('live-bar').hidden = false;
+  document.getElementById('live-toggle-btn').classList.add('on');
+  persistLive();
+  switchTab('draft');
+  if (lastLiveState) applyLiveState(lastLiveState);
+  else runLiveRecompute();
+}
+
+function exitLiveMode() {
+  liveMode = false; livePaused = false; liveAutoPath = false;
+  liveDrafted = new Set(); liveMyPicksAdp = []; liveOffGraph = false; liveUnmatched = [];
+  draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = [];
+  draftBestRemaining = []; initialBestVal = null;
+  try { localStorage.removeItem('liveDraftState'); } catch (e) {}
+  boardFilters.hideDrafted = false;
+  const cb = document.getElementById('hide-drafted-cb'); if (cb) cb.checked = false;
+  document.getElementById('live-toggle-btn').classList.remove('on');
+  document.getElementById('live-bar').hidden = true;
+  if (activeTab === 'board') renderBoard();
+  else if (activeTab !== 'info' && activeTab !== 'saved') { renderAll(); renderPathRankings(); }
+  renderLiveBar();
+}
+
+function renderLiveBar() {
+  const bar = document.getElementById('live-bar');
+  if (!bar) return;
+  const dot = document.getElementById('live-dot');
+  const status = document.getElementById('live-status');
+  const info = document.getElementById('live-info');
+  const warn = document.getElementById('live-warn');
+  const startBtn = document.getElementById('live-start-btn');
+  const pauseBtn = document.getElementById('live-pause-btn');
+  const exitBtn = document.getElementById('live-exit-btn');
+  const hd = document.getElementById('hide-drafted-wrap');
+
+  dot.className = liveConnected ? 'live-on' : 'live-off';
+  if (hd) hd.style.display = liveMode ? '' : 'none';
+
+  if (liveMode) {
+    startBtn.hidden = true; pauseBtn.hidden = false; exitBtn.hidden = false;
+    pauseBtn.textContent = livePaused ? 'Resume' : 'Pause';
+    status.textContent = livePaused ? 'Live — paused'
+      : liveConnected ? 'Live — ESPN connected' : 'Live — paste mode';
+    const bits = [];
+    if (liveLastPick) bits.push('pick ' + liveLastPick);
+    bits.push('slot ' + draftSlot + (liveMySlot ? '' : ' (set manually)'));
+    bits.push(liveDrafted.size + ' off the board');
+    if (!liveAutoPath && liveConnected) bits.push('advancing path by hand');
+    info.textContent = bits.join('  ·  ');
+    const w = [];
+    if (liveOffGraph) w.push('⚠ your live roster left the modeled graph — relax rules to keep following it');
+    if (liveUnmatched.length) w.push('⚠ ' + liveUnmatched.length + ' unmatched: '
+      + liveUnmatched.slice(0, 4).map(u => u.name).join(', ') + (liveUnmatched.length > 4 ? '…' : ''));
+    warn.textContent = w.join('      ');
+  } else {
+    startBtn.hidden = false; pauseBtn.hidden = true; exitBtn.hidden = true;
+    status.textContent = liveConnected ? 'ESPN mock detected' : 'Live draft';
+    info.textContent = liveConnected
+      ? 'ready — set your draft slot, then Start'
+      : 'waiting for the ESPN bridge userscript — or use "Paste picks"';
+    warn.textContent = '';
+  }
+}
+
+window.addEventListener('message', e => {
+  const d = e.data;
+  if (!d || d.source !== 'espn-mock-bridge' || !d.state) return;
+  if (!liveMode) document.getElementById('live-bar').hidden = false;
+  applyLiveState(d.state);
+});
+
+document.getElementById('live-toggle-btn').addEventListener('click', () => {
+  const bar = document.getElementById('live-bar');
+  if (liveMode) { exitLiveMode(); return; }
+  bar.hidden = !bar.hidden;
+  document.getElementById('live-toggle-btn').classList.toggle('on', !bar.hidden);
+  renderLiveBar();
+});
+document.getElementById('live-start-btn').addEventListener('click', enterLiveMode);
+document.getElementById('live-exit-btn').addEventListener('click', exitLiveMode);
+document.getElementById('live-pause-btn').addEventListener('click', () => {
+  livePaused = !livePaused;
+  if (!livePaused && lastLiveState) applyLiveState(lastLiveState);
+  renderLiveBar();
+});
+document.getElementById('live-manual-btn').addEventListener('click', () => {
+  const m = document.getElementById('live-manual');
+  m.hidden = !m.hidden;
+});
+document.getElementById('live-manual-apply').addEventListener('click', () => {
+  if (!liveMode) enterLiveMode();
+  const r = applyManualPicks(document.getElementById('live-manual-text').value);
+  document.getElementById('live-manual-result').textContent =
+    r.matched + '/' + r.total + ' matched' + (r.total - r.matched ? ' — check spelling of the rest' : '');
+});
+document.getElementById('live-manual-clear').addEventListener('click', () => {
+  liveDrafted = new Set(); liveMyPicksAdp = []; liveUnmatched = [];
+  persistLive();
+  runLiveRecompute();
+  document.getElementById('live-manual-result').textContent = 'cleared';
+});
+document.getElementById('hide-drafted-cb').addEventListener('change', e => {
+  boardFilters.hideDrafted = e.target.checked;
+  renderBoard();
+});
+
+// Reflect a restored live session into the UI
+if (liveMode) {
+  document.getElementById('live-bar').hidden = false;
+  document.getElementById('live-toggle-btn').classList.add('on');
+  const sl = document.getElementById('slot-in'); if (sl && liveMySlot) sl.value = draftSlot;
+}
+renderLiveBar();
 
 </script>
 </body>

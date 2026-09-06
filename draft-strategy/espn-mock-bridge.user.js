@@ -1,0 +1,361 @@
+// ==UserScript==
+// @name         ESPN Mock Draft → Draft Strategy Network bridge
+// @namespace    ezrawinternelson.com/draft-strategy
+// @version      0.1.0
+// @description  Captures picks from an ESPN mock draft room and feeds them into the Draft Strategy Network so drafted players drop off the board and path values update live.
+// @match        https://fantasy.espn.com/*
+// @match        https://*.fantasy.espn.com/*
+// @match        https://ezrawinternelson.com/draft-strategy/*
+// @match        https://ezrawn.github.io/draft-strategy/*
+// @match        http://localhost:*/draft-strategy/*
+// @match        http://127.0.0.1:*/draft-strategy/*
+// @run-at       document-start
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_addValueChangeListener
+// @grant        GM_xmlhttpRequest
+// @connect      lm-api-reads.fantasy.espn.com
+// ==/UserScript==
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ *  HOW THIS WORKS
+ *
+ *  This one script runs on two kinds of page:
+ *
+ *   1. The ESPN draft room  (fantasy.espn.com/...draft...)
+ *      - hooks the draft WebSocket and reads pick events
+ *      - falls back to scraping the on-screen pick list
+ *      - resolves ESPN player IDs to names via ESPN's own players endpoint
+ *      - writes the running pick list to shared storage (GM_setValue)
+ *      - shows a small control panel (bottom-right) for your draft slot
+ *
+ *   2. The Draft Strategy Network  (ezrawinternelson.com/draft-strategy/)
+ *      - reads shared storage and forwards it into the page as a postMessage
+ *        that the tool listens for
+ *
+ *  Tampermonkey's GM storage is shared across every page the script runs on,
+ *  regardless of origin — that's the channel between the two tabs.
+ *
+ *  ─────────────────────────────────────────────────────────────────────────────
+ *  IF PICKS AREN'T BEING CAPTURED
+ *
+ *  ESPN ships DOM/protocol changes without notice. Open the browser console on
+ *  the ESPN draft tab, filter for "[espn-bridge]", run a few mock picks, and
+ *  send the logged lines to me — that's what I need to re-tune the selectors /
+ *  message parsing. Meanwhile the tool's "Paste picks" box always works.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+(function () {
+  'use strict';
+
+  const STORE_KEY = 'espnMockDraftState';
+  const LOG = (...a) => console.log('[espn-bridge]', ...a);
+  const IS_TOOL = /\/draft-strategy\//.test(location.pathname);
+  const IS_ESPN = /(^|\.)fantasy\.espn\.com$/.test(location.hostname);
+
+  // ===========================================================================
+  //  TOOL SIDE — forward shared storage into the page
+  // ===========================================================================
+  if (IS_TOOL) {
+    const push = () => {
+      const state = GM_getValue(STORE_KEY, null);
+      if (state) window.postMessage({ source: 'espn-mock-bridge', state }, '*');
+    };
+    try { GM_addValueChangeListener(STORE_KEY, push); } catch (e) { LOG('no value listener', e); }
+    // Push whatever is already stored once the tool page is ready.
+    if (document.readyState === 'complete') push();
+    else window.addEventListener('load', push);
+    // Also re-push periodically in case a listener was missed on a fresh tab.
+    setInterval(push, 4000);
+    LOG('tool bridge active');
+    return;
+  }
+
+  if (!IS_ESPN) return;
+
+  // ===========================================================================
+  //  ESPN SIDE
+  // ===========================================================================
+
+  const SEASON = (new Date().getMonth() >= 2 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+  const POS_BY_ID = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
+  const TEAM_BY_ID = {
+    0: '', 1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN', 8: 'DET',
+    9: 'GB', 10: 'TEN', 11: 'IND', 12: 'KC', 13: 'LV', 14: 'LAR', 15: 'MIA', 16: 'MIN',
+    17: 'NE', 18: 'NO', 19: 'NYG', 20: 'NYJ', 21: 'PHI', 22: 'ARI', 23: 'PIT', 24: 'LAC',
+    25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WSH', 29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU'
+  };
+
+  // Running draft state
+  const picksByOverall = new Map();     // overall pick # -> { overall, name, pos, team }
+  const picksByPlayerId = new Map();    // playerId -> overall (dedupe when overall unknown)
+  let seqCounter = 0;                   // fallback ordering when no overall # is present
+  let leagueSize = null;
+  let mySlot = Number(GM_getValue('espnBridgeMySlot', 0)) || null;
+
+  // ---- ESPN player id → info -------------------------------------------------
+  const playerInfo = new Map();         // id -> { name, pos, team }
+  let playersLoaded = false;
+
+  function loadPlayers() {
+    const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${SEASON}/players?view=players_wl`;
+    const handle = (txt) => {
+      try {
+        const arr = JSON.parse(txt);
+        arr.forEach(p => {
+          playerInfo.set(p.id, {
+            name: p.fullName || p.name || '',
+            pos: POS_BY_ID[p.defaultPositionId] || '',
+            team: TEAM_BY_ID[p.proTeamId] || ''
+          });
+        });
+        playersLoaded = true;
+        LOG(`player index: ${playerInfo.size} players (season ${SEASON})`);
+        reprocessPending();
+      } catch (e) { LOG('player parse failed', e); }
+    };
+    // Same-origin-ish fetch first; fall back to GM_xmlhttpRequest.
+    fetch(url, { headers: { 'x-fantasy-filter': '{"filterActive":null}' }, credentials: 'omit' })
+      .then(r => r.text()).then(handle)
+      .catch(() => {
+        try {
+          GM_xmlhttpRequest({
+            method: 'GET', url,
+            headers: { 'x-fantasy-filter': '{"filterActive":null}' },
+            onload: r => handle(r.responseText),
+            onerror: e => LOG('player fetch failed', e)
+          });
+        } catch (e) { LOG('player fetch unavailable', e); }
+      });
+  }
+
+  // Picks that arrived before the player index was ready
+  const pendingIdPicks = [];            // { playerId, overall, teamId }
+  function reprocessPending() {
+    if (!playersLoaded) return;
+    const still = [];
+    pendingIdPicks.forEach(p => { if (!addPickById(p.playerId, p.overall, p.teamId)) still.push(p); });
+    pendingIdPicks.length = 0;
+    pendingIdPicks.push(...still);
+    broadcast();
+  }
+
+  // ---- adding picks --------------------------------------------------------
+  function addPick({ overall, name, pos, team }) {
+    if (!name) return false;
+    const ov = overall && overall > 0 ? overall : (10000 + (++seqCounter));
+    const prev = picksByOverall.get(ov);
+    if (prev && prev.name === name) return true;
+    picksByOverall.set(ov, { overall: overall && overall > 0 ? overall : 0, name, pos: pos || '', team: team || '' });
+    if (leagueSize == null) inferLeagueSize();
+    return true;
+  }
+
+  function addPickById(playerId, overall, teamId) {
+    if (picksByPlayerId.has(playerId) && overall) {
+      // upgrade a seq-ordered pick to a real overall number
+      picksByPlayerId.set(playerId, overall);
+    }
+    if (!playersLoaded) { pendingIdPicks.push({ playerId, overall, teamId }); return false; }
+    const info = playerInfo.get(playerId);
+    if (!info) { LOG('unknown playerId', playerId); return false; }
+    picksByPlayerId.set(playerId, overall || 0);
+    return addPick({ overall, name: info.name, pos: info.pos, team: info.team });
+  }
+
+  function inferLeagueSize() {
+    // Best-effort: ESPN mock lobby is usually 10; try to read it off the page.
+    const txt = document.body ? document.body.innerText : '';
+    const m = txt.match(/(\d{1,2})\s*[- ]?team/i);
+    if (m) leagueSize = Math.max(4, Math.min(20, +m[1]));
+  }
+
+  // ---- broadcast to shared storage ---------------------------------------
+  let broadcastTimer = null;
+  function broadcast() {
+    clearTimeout(broadcastTimer);
+    broadcastTimer = setTimeout(() => {
+      const picks = [...picksByOverall.values()]
+        .filter(p => p.name)
+        .sort((a, b) => (a.overall || 1e9) - (b.overall || 1e9));
+      const state = {
+        source: 'espn-bridge',
+        connected: true,
+        ts: Date.now(),
+        leagueSize: leagueSize || undefined,
+        mySlot: mySlot || undefined,
+        picks
+      };
+      try { GM_setValue(STORE_KEY, state); } catch (e) { LOG('GM_setValue failed', e); }
+      updatePanel(picks.length);
+    }, 250);
+  }
+
+  // ---- WebSocket hook ---------------------------------------------------
+  const NativeWS = window.WebSocket;
+  function hookWebSocket() {
+    if (!NativeWS) return;
+    window.WebSocket = function (url, protocols) {
+      const ws = protocols ? new NativeWS(url, protocols) : new NativeWS(url);
+      LOG('WebSocket opened:', url);
+      ws.addEventListener('message', ev => {
+        try { handleWsPayload(ev.data); }
+        catch (e) { /* ignore per-message errors */ }
+      });
+      return ws;
+    };
+    window.WebSocket.prototype = NativeWS.prototype;
+    Object.getOwnPropertyNames(NativeWS).forEach(k => {
+      try { window.WebSocket[k] = NativeWS[k]; } catch (e) {}
+    });
+    LOG('WebSocket hook installed');
+  }
+
+  let wsSampleLogged = 0;
+  function handleWsPayload(data) {
+    if (typeof data !== 'string') return;
+    let obj;
+    try { obj = JSON.parse(data); }
+    catch (e) {
+      // Some ESPN frames are newline/pipe delimited wrappers around JSON
+      const j = data.indexOf('{');
+      if (j >= 0) { try { obj = JSON.parse(data.slice(j)); } catch (e2) { return; } }
+      else return;
+    }
+    if (wsSampleLogged < 8) { LOG('ws msg sample:', obj); wsSampleLogged++; }
+    scanForPicks(obj);
+  }
+
+  // Recursively look for pick-shaped objects. ESPN has used several shapes over
+  // the years; match on "has a player id AND (an overall pick number OR looks
+  // like a selection)".
+  function scanForPicks(node, depth) {
+    if (!node || typeof node !== 'object' || (depth || 0) > 6) return;
+    if (Array.isArray(node)) { node.forEach(n => scanForPicks(n, (depth || 0) + 1)); return; }
+
+    const pid = firstNum(node, ['playerId', 'playerID', 'player_id', 'playerid']);
+    const overall = firstNum(node, ['overallPickNumber', 'overallPick', 'overall', 'pickNumber', 'overall_selection']);
+    const typeStr = String(node.type || node.messageType || node.action || node.command || '').toUpperCase();
+    const looksLikeSelection = /SELECT|PICK|DRAFT/.test(typeStr);
+
+    if (pid && (overall || looksLikeSelection)) {
+      const teamId = firstNum(node, ['teamId', 'toTeamId', 'memberId', 'fantasyTeamId']);
+      if (mySlot == null && looksLikeSelection && node.autodraft === false && teamId) {
+        // can't map teamId→slot reliably; leave slot to the user
+      }
+      addPickById(pid, overall || 0, teamId || 0);
+      broadcast();
+    }
+
+    // Inline player object (name already present, no lookup needed)
+    const nm = node.fullName || (node.player && (node.player.fullName || node.player.name));
+    if (nm && (overall || looksLikeSelection)) {
+      const posId = firstNum(node, ['defaultPositionId', 'positionId']) ||
+                    (node.player && firstNum(node.player, ['defaultPositionId', 'positionId']));
+      const teamId2 = firstNum(node, ['proTeamId']) || (node.player && firstNum(node.player, ['proTeamId']));
+      addPick({ overall: overall || 0, name: nm, pos: POS_BY_ID[posId] || '', team: TEAM_BY_ID[teamId2] || '' });
+      broadcast();
+    }
+
+    for (const k in node) {
+      if (node[k] && typeof node[k] === 'object') scanForPicks(node[k], (depth || 0) + 1);
+    }
+  }
+
+  function firstNum(obj, keys) {
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'number' && v > 0) return v;
+      if (typeof v === 'string' && /^\d+$/.test(v)) return +v;
+    }
+    return 0;
+  }
+
+  // ---- DOM fallback ------------------------------------------------------
+  // Watches for rows that look like "<POS> <Player Name>" appearing in a list.
+  const seenDomText = new Set();
+  function hookDom() {
+    const obs = new MutationObserver(muts => {
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          scanDomNode(n);
+        }
+      }
+    });
+    const start = () => obs.observe(document.body, { childList: true, subtree: true });
+    if (document.body) start();
+    else window.addEventListener('DOMContentLoaded', start);
+    LOG('DOM observer installed');
+  }
+
+  function scanDomNode(el) {
+    // Heuristic: an element containing a position token and a plausible name.
+    const txt = (el.innerText || el.textContent || '').trim();
+    if (!txt || txt.length > 80 || seenDomText.has(txt)) return;
+    const m = txt.match(/\b(QB|RB|WR|TE|K|D\/ST|DST)\b[\s,\-–|]*([A-Z][A-Za-z.'’\-]+(?:\s+[A-Z][A-Za-z.'’\-]+){0,3})/);
+    if (!m) return;
+    const name = m[2].trim();
+    if (name.split(' ').length < 2 && !/D\/ST|DST/.test(m[1])) return;
+    seenDomText.add(txt);
+    const pos = m[1] === 'D/ST' ? 'DST' : m[1];
+    LOG('DOM pick candidate:', pos, name, '   (raw:', JSON.stringify(txt), ')');
+    addPick({ overall: 0, name, pos, team: '' });
+    broadcast();
+  }
+
+  // ---- on-page control panel ------------------------------------------
+  let panelEl = null;
+  function buildPanel() {
+    if (panelEl || !document.body) return;
+    panelEl = document.createElement('div');
+    panelEl.style.cssText = [
+      'position:fixed', 'right:12px', 'bottom:12px', 'z-index:2147483647',
+      'background:#0f172a', 'color:#e2e8f0', 'font:12px/1.4 system-ui,sans-serif',
+      'padding:9px 11px', 'border-radius:8px', 'box-shadow:0 4px 16px #0007',
+      'width:210px'
+    ].join(';');
+    panelEl.innerHTML =
+      '<div style="font-weight:700;margin-bottom:5px">Draft bridge</div>' +
+      '<div id="eb-status" style="color:#94a3b8;margin-bottom:6px">starting…</div>' +
+      '<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px">My draft slot' +
+      '<input id="eb-slot" type="number" min="1" max="20" style="width:46px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:2px 4px"></label>' +
+      '<label style="display:flex;align-items:center;gap:6px;margin-bottom:6px">League size' +
+      '<input id="eb-size" type="number" min="4" max="20" style="width:46px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:4px;padding:2px 4px"></label>' +
+      '<button id="eb-resend" style="width:100%;background:#2563eb;color:#fff;border:0;border-radius:4px;padding:3px;cursor:pointer">Force resend</button>' +
+      '<div style="color:#64748b;margin-top:5px;font-size:11px">Set your slot to your position in this mock.</div>';
+    document.body.appendChild(panelEl);
+    const slotIn = panelEl.querySelector('#eb-slot');
+    const sizeIn = panelEl.querySelector('#eb-size');
+    if (mySlot) slotIn.value = mySlot;
+    if (leagueSize) sizeIn.value = leagueSize;
+    slotIn.addEventListener('change', () => {
+      mySlot = Math.max(1, Math.min(20, +slotIn.value || 0)) || null;
+      GM_setValue('espnBridgeMySlot', mySlot || 0);
+      broadcast();
+    });
+    sizeIn.addEventListener('change', () => {
+      leagueSize = Math.max(4, Math.min(20, +sizeIn.value || 0)) || null;
+      broadcast();
+    });
+    panelEl.querySelector('#eb-resend').addEventListener('click', broadcast);
+  }
+
+  function updatePanel(nPicks) {
+    if (!panelEl) return;
+    const s = panelEl.querySelector('#eb-status');
+    if (s) s.textContent = `${nPicks} picks captured` + (playersLoaded ? '' : ' · loading players…');
+    const sizeIn = panelEl.querySelector('#eb-size');
+    if (sizeIn && leagueSize && !sizeIn.value) sizeIn.value = leagueSize;
+  }
+
+  // ---- go --------------------------------------------------------------
+  hookWebSocket();
+  loadPlayers();
+  const domReady = () => { buildPanel(); hookDom(); inferLeagueSize(); broadcast(); };
+  if (document.body) domReady();
+  else window.addEventListener('DOMContentLoaded', domReady);
+  LOG('ESPN side active; season', SEASON);
+})();
