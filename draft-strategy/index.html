@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Fantasy Draft Strategy Network</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -318,6 +319,62 @@ canvas#lbar { height: 13px; width: 220px; border-radius: 2px; border: 1px solid 
 .sv-bad     { color: #dc2626; font-weight: 700; }
 .sv-neutral { color: #444;    font-weight: 700; }
 .sv-seq-table { margin-top: 14px; }
+
+/* ─── Mobile / narrow-viewport support ──────────────────────────────────────
+   Everything below is scoped to narrow screens only. The desktop layout above
+   is left completely untouched, so the site's appearance on the web is
+   unchanged; these rules only take effect at <= 720px viewport width. */
+@media (max-width: 720px) {
+  html, body { height: auto; }
+  body { overflow-x: hidden; overflow-y: auto; -webkit-text-size-adjust: 100%; }
+
+  /* Tab bar: keep reachable, scroll sideways if it overflows */
+  #tab-bar { position: sticky; top: 0; z-index: 20; overflow-x: auto; padding: 0 6px; -webkit-overflow-scrolling: touch; }
+  .tab-btn { padding: 8px 12px; font-size: 0.8rem; white-space: nowrap; flex: 0 0 auto; }
+
+  #header { padding: 7px 12px; }
+
+  /* Draft status bar wraps instead of forcing width */
+  #draft-bar { flex-wrap: wrap; gap: 6px 14px; }
+  #draft-status { margin-left: 0; width: 100%; }
+
+  /* Stack the three-panel workspace vertically */
+  #main { flex-direction: column; overflow: visible; flex: none; }
+  #draft-sidebar, #rules-panel, #panel {
+    width: 100%;
+    flex-grow: 0; flex-shrink: 1;
+    border-left: none; border-right: none;
+    border-bottom: 1px solid #ddd;
+  }
+  #rules-panel, #panel { overflow: visible; height: auto; }
+  #rules-list { flex: none; max-height: 46vh; }
+  #dsb-body { max-height: 52vh; }
+
+  /* Graph scales to width; pinch-zoom to read labels */
+  #graph-wrap { flex: none; flex-direction: column; padding: 6px 4px; overflow: hidden; }
+  svg#graph { width: 100%; height: auto; max-height: 78vh; }
+  #graph-legend { position: static; margin: 8px auto 0; background: #fff; }
+
+  /* Player board */
+  #board-view { flex: none; }
+  #board-toolbar { padding: 8px 10px; }
+  .board-search { width: 100%; }
+  #board-table-wrap { flex: none; overflow-x: auto; }
+  #board-table { font-size: 0.78rem; }
+  #board-table th, #board-table td { padding: 5px 7px; }
+
+  /* Saved paths: stack comparison table above the network overlay */
+  #saved-view { flex-direction: column; flex: none; }
+  #saved-content { width: 100%; border-right: none; border-bottom: 1px solid #e4e4e4; overflow-x: auto; }
+  #saved-viz { min-height: 62vh; }
+  #saved-viz-inner { min-height: 58vh; }
+
+  /* Info page */
+  #info-view { flex: none; overflow: visible; }
+  #info-wrap { padding: 22px 16px 56px; }
+  #info-wrap h1 { font-size: 1.25rem; }
+  .info-metric-row { gap: 8px; }
+}
 </style>
 </head>
 <body>
