@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ESPN Mock Draft → Draft Strategy Network bridge
 // @namespace    ezrawinternelson.com/draft-strategy
-// @version      0.2.0
+// @version      0.5.0
 // @description  Captures picks from an ESPN mock draft room and feeds them into the Draft Strategy Network so drafted players drop off the board and path values update live.
 // @match        *://*.espn.com/*
 // @match        https://ezrawinternelson.com/draft-strategy/*
@@ -60,7 +60,7 @@
   const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
   const STORE_KEY = 'espnMockDraftState';
-  const VERSION = 'v0.4';
+  const VERSION = 'v0.5';
 
   // Ring-buffered log so diagnostics survive any console level filter.
   // In the ESPN console:  __ebDump()  prints everything;  __ebDump(true)  copies it.
@@ -126,7 +126,11 @@
   const LOOKS_DRAFTY = /fantasy|draft|gambit|lobby/i.test(location.href);
   if (!LOOKS_DRAFTY) { LOG('not a fantasy/draft page — bridge idle here'); return; }
 
-  const SEASON = (new Date().getMonth() >= 2 ? new Date().getFullYear() : new Date().getFullYear() - 1);
+  const _params = new URLSearchParams(location.search);
+  const LEAGUE_ID = _params.get('leagueId') || '';
+  const MY_TEAM_ID = +_params.get('teamId') || 0;
+  const SEASON = +_params.get('seasonId') ||
+    (new Date().getMonth() >= 2 ? new Date().getFullYear() : new Date().getFullYear() - 1);
   const POS_BY_ID = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
   const TEAM_BY_ID = {
     0: '', 1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN', 8: 'DET',
@@ -176,6 +180,46 @@
           });
         } catch (e) { LOG('player fetch unavailable', e); }
       });
+  }
+
+  // ---- primary source: poll the league's draftDetail ---------------------
+  // The draft room's realtime socket (wss://fantasydraft.espn.com) speaks a
+  // custom line protocol, but this REST view carries the full pick list and is
+  // stable. leagueId/teamId come from the draft URL.
+  let pollTimer = null, pollMisses = 0, pollCount = 0;
+  function pollDraftDetail() {
+    pollCount++;
+    if (!LEAGUE_ID) { LOG('no leagueId in URL — cannot poll'); return; }
+    const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${SEASON}` +
+                `/segments/0/leagues/${LEAGUE_ID}?view=mDraftDetail`;
+    const done = (txt) => {
+      let j; try { j = JSON.parse(txt); } catch (e) { pollMisses++; LOG('poll: bad JSON'); return; }
+      const dd = j.draftDetail || {};
+      const picks = dd.picks || [];
+      const before = picksByOverall.size;
+      picks.forEach(pk => {
+        const pid = pk.playerId || (pk.player && pk.player.id);
+        const ov = pk.overallPickNumber || pk.overallPick || 0;
+        if (pid > 0 && ov > 0) addPickById(pid, ov, pk.teamId || 0);
+      });
+      const st = j.settings || {};
+      if (st.size >= 4 && st.size <= 20) leagueSize = st.size;
+      const order = st.draftSettings && st.draftSettings.pickOrder;
+      if (Array.isArray(order)) {
+        if (!leagueSize) leagueSize = order.length;
+        if (MY_TEAM_ID) { const i = order.indexOf(MY_TEAM_ID); if (i >= 0) mySlot = i + 1; }
+      }
+      if (picks.length || picksByOverall.size !== before) {
+        LOG(`poll: server picks=${picks.length} captured=${picksByOverall.size} inProgress=${dd.inProgress} slot=${mySlot} size=${leagueSize}`);
+      }
+      broadcast();
+    };
+    if (typeof GM_xmlhttpRequest === 'function') {
+      GM_xmlhttpRequest({ method: 'GET', url, headers: { accept: 'application/json' },
+        onload: r => done(r.responseText), onerror: () => { pollMisses++; LOG('poll: xhr error'); } });
+    } else {
+      fetch(url, { credentials: 'include' }).then(r => r.text()).then(done).catch(() => { pollMisses++; LOG('poll: fetch error'); });
+    }
   }
 
   // Picks that arrived before the player index was ready
@@ -320,7 +364,7 @@
   // ESPN's live-draft realtime client very likely runs in a Web Worker, whose
   // WebSocket a page hook can't see. But the worker posts pick events back to
   // the main thread — catch them there.
-  let workerCount = 0, workerMsgCount = 0, wsSampleLogged = 0;
+  let workerCount = 0, workerMsgCount = 0, wsSampleLogged = 0, wsVerbLogged = 0;
   function wrapWorker(Native, label) {
     if (!Native) return Native;
     const Wrapped = function (url, opts) {
@@ -393,7 +437,24 @@
       if (wsSampleLogged < 12) { LOG('ws non-string msg:', Object.prototype.toString.call(data)); wsSampleLogged++; }
       return;
     }
-    if (wsSampleLogged < 12) { LOG('ws msg raw:', data.length > 400 ? data.slice(0, 400) + '…' : data); wsSampleLogged++; }
+    // fantasydraft.espn.com line protocol: "VERB arg1 arg2 ..."
+    const sp = data.indexOf(' ');
+    const verb = (sp < 0 ? data : data.slice(0, sp)).trim().toUpperCase();
+    const rest = sp < 0 ? '' : data.slice(sp + 1);
+    const BORING = /^(INIT|TOKEN|CLOCK|AUTOSUGGEST|JOINED|LEFT|PONG|PING|CHAT|MSG|MESSAGE|KEEPALIVE|HEARTBEAT|SETTINGS|ROSTER|MEMBER|STATUS)$/;
+    if (!BORING.test(verb)) {
+      if (wsVerbLogged < 40) { LOG('ws verb:', verb, '|', rest.slice(0, 200)); wsVerbLogged++; }
+      if (/SELECT|PICK|DRAFT/.test(verb)) {
+        LOG('ws PICK-like msg:', data.slice(0, 240));
+        const nums = (rest.match(/\d+/g) || []).map(Number);
+        const pid = nums.find(n => n > 50000);            // ESPN playerIds are large
+        const ov = nums.find(n => n > 0 && n < 600);      // overall pick number
+        if (pid) { addPickById(pid, ov || 0, 0); broadcast(); }
+      }
+    } else if (wsSampleLogged < 12) {
+      LOG('ws msg raw:', data.length > 300 ? data.slice(0, 300) + '…' : data); wsSampleLogged++;
+    }
+    // also try JSON in case some frames are structured
     let obj;
     try { obj = JSON.parse(data); }
     catch (e) {
@@ -525,7 +586,7 @@
     const s = panelEl.querySelector('#eb-status');
     if (s) s.innerHTML =
       `<b>${nPicks}</b> picks captured` + (playersLoaded ? '' : ' · loading players…') +
-      `<br><span style="font-size:10px;color:#64748b">ws ${wsCount}/${wsMsgCount} · wkr ${workerCount}/${workerMsgCount} · http ${httpStats.fetch + httpStats.xhr}/${httpStats.hits} · ${W.top !== W.self ? 'iframe' : 'top'}</span>` +
+      `<br><span style="font-size:10px;color:#64748b">poll ${pollCount} · ws ${wsCount}/${wsMsgCount} · wkr ${workerCount}/${workerMsgCount}</span>` +
       `<br><span style="font-size:10px;color:#64748b">__ebDump(true) → clipboard</span>`;
     const sizeIn = panelEl.querySelector('#eb-size');
     if (sizeIn && leagueSize && !sizeIn.value) sizeIn.value = leagueSize;
@@ -535,6 +596,13 @@
   hookWebSocket();
   loadPlayers();
   heartbeat = setInterval(broadcast, 3000);
+  // Primary pick source: poll the league draftDetail every 2.5s.
+  if (LEAGUE_ID) {
+    setTimeout(pollDraftDetail, 1200);      // let the player index load first
+    pollTimer = setInterval(pollDraftDetail, 2500);
+  } else {
+    LOG('no leagueId — DOM scrape + WS only');
+  }
   const domReady = () => {
     if (W.top === W.self) buildPanel();
     hookDom();
