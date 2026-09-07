@@ -10,6 +10,8 @@
 // @match        http://127.0.0.1:*/draft-strategy/*
 // @match        file:///*draft-strategy*
 // @run-at       document-start
+// @grant        unsafeWindow
+// @grant        GM_setClipboard
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addValueChangeListener
@@ -52,8 +54,13 @@
 (function () {
   'use strict';
 
+  // With @grant GM_*, this script runs in a sandbox whose `window` is NOT the
+  // page's. Hooks (WebSocket/Worker/fetch) and console-visible globals must go
+  // on the real page window.
+  const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+
   const STORE_KEY = 'espnMockDraftState';
-  const VERSION = 'v0.3';
+  const VERSION = 'v0.4';
 
   // Ring-buffered log so diagnostics survive any console level filter.
   // In the ESPN console:  __ebDump()  prints everything;  __ebDump(true)  copies it.
@@ -71,16 +78,23 @@
   const IS_ESPN = /(^|\.)espn\.com$/.test(location.hostname) && !IS_TOOL;
 
   try {
-    window.__espnBridge = VERSION + ' @ ' + location.href + (window.top !== window.self ? ' [iframe]' : '');
-    window.__ebDump = (copyIt) => {
+    const IN_FRAME = W.top !== W.self;
+    const dumpFn = (copyIt) => {
       let extra = '';
       try { extra = '\n\n--- request URLs seen ---\n' + httpSeen.join('\n'); } catch (e) {}
-      const txt = '=== espn-bridge ' + VERSION + ' ===\n' + window.__espnBridge + '\n\n' + _log.join('\n') + extra;
-      if (copyIt && typeof copy === 'function') { copy(txt); return 'copied to clipboard (' + txt.length + ' chars)'; }
+      const txt = '=== espn-bridge ' + VERSION + ' ===\n' + W.__espnBridge + '\n\n' + _log.join('\n') + extra;
+      if (copyIt) {
+        try { GM_setClipboard(txt); return 'copied to clipboard (' + txt.length + ' chars) — paste it'; }
+        catch (e) { try { navigator.clipboard.writeText(txt); return 'copied (' + txt.length + ' chars)'; } catch (e2) {} }
+      }
       console.log(txt); return txt;
     };
+    // Expose on the page window (console runs in page context) AND the sandbox.
+    W.__espnBridge = VERSION + ' @ ' + location.href + (IN_FRAME ? ' [iframe]' : '');
+    W.__ebDump = dumpFn;
+    try { window.__espnBridge = W.__espnBridge; window.__ebDump = dumpFn; } catch (e) {}
     console.warn('%c[espn-bridge] ' + VERSION + ' running', 'background:#ea580c;color:#fff;padding:2px 6px;border-radius:3px',
-      '| espn:', IS_ESPN, '| iframe:', window.top !== window.self, '| type  __ebDump()  for logs');
+      '| espn:', IS_ESPN, '| iframe:', IN_FRAME, '| type  __ebDump()  for logs');
   } catch (e) {}
 
   // ===========================================================================
@@ -89,12 +103,12 @@
   if (IS_TOOL) {
     const push = () => {
       const state = GM_getValue(STORE_KEY, null);
-      if (state) window.postMessage({ source: 'espn-mock-bridge', state }, '*');
+      if (state) W.postMessage({ source: 'espn-mock-bridge', state }, '*');
     };
     try { GM_addValueChangeListener(STORE_KEY, push); } catch (e) { LOG('no value listener', e); }
     // Push whatever is already stored once the tool page is ready.
     if (document.readyState === 'complete') push();
-    else window.addEventListener('load', push);
+    else W.addEventListener('load', push);
     // Also re-push periodically in case a listener was missed on a fresh tab.
     setInterval(push, 4000);
     LOG('tool bridge active');
@@ -262,32 +276,34 @@
     for (const k in node) { const v = deepFind(node[k], keys, (depth || 0) + 1); if (v) return v; }
     return 0;
   }
-  const NativeFetch = window.fetch;
+  const NativeFetch = W.fetch;
   if (NativeFetch) {
-    window.fetch = function (...args) {
+    W.fetch = function (...args) {
       const p = NativeFetch.apply(this, args);
       const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
       httpStats.fetch++;
-      p.then(r => { try { r.clone().text().then(t => scanHttpBody(url, t)); } catch (e) {} }).catch(() => {});
+      try { p.then(r => { try { r.clone().text().then(t => scanHttpBody(url, t)); } catch (e) {} }).catch(() => {}); } catch (e) {}
       return p;
     };
   }
-  const XOpen = XMLHttpRequest.prototype.open;
-  const XSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.open = function (m, url) { this.__ebUrl = url; return XOpen.apply(this, arguments); };
-  XMLHttpRequest.prototype.send = function () {
-    httpStats.xhr++;
-    this.addEventListener('load', () => {
-      try { scanHttpBody(this.__ebUrl || '', this.responseText); } catch (e) {}
-    });
-    return XSend.apply(this, arguments);
-  };
+  try {
+    const XP = W.XMLHttpRequest.prototype;
+    const XOpen = XP.open, XSend = XP.send;
+    XP.open = function (m, url) { this.__ebUrl = url; return XOpen.apply(this, arguments); };
+    XP.send = function () {
+      httpStats.xhr++;
+      this.addEventListener('load', () => {
+        try { scanHttpBody(this.__ebUrl || '', this.responseText); } catch (e) {}
+      });
+      return XSend.apply(this, arguments);
+    };
+  } catch (e) { LOG('XHR hook failed', e); }
   LOG('fetch/XHR hooks installed');
 
   // ---- EventSource (SSE) hook -----------------------------------------
-  const NativeES = window.EventSource;
+  const NativeES = W.EventSource;
   if (NativeES) {
-    window.EventSource = function (url, cfg) {
+    W.EventSource = function (url, cfg) {
       LOG('EventSource opened:', url);
       const es = cfg ? new NativeES(url, cfg) : new NativeES(url);
       es.addEventListener('message', ev => {
@@ -296,7 +312,7 @@
       });
       return es;
     };
-    try { window.EventSource.prototype = NativeES.prototype; } catch (e) {}
+    try { W.EventSource.prototype = NativeES.prototype; } catch (e) {}
     LOG('EventSource hook installed');
   }
 
@@ -334,16 +350,16 @@
       else if (d && typeof d === 'object') { scanForPicks(d, 0); broadcast(); }
     } catch (e) {}
   }
-  try { window.Worker = wrapWorker(window.Worker, 'Worker'); } catch (e) {}
-  try { window.SharedWorker = wrapWorker(window.SharedWorker, 'SharedWorker'); } catch (e) {}
+  try { W.Worker = wrapWorker(W.Worker, 'Worker'); } catch (e) { LOG('Worker hook failed', e); }
+  try { W.SharedWorker = wrapWorker(W.SharedWorker, 'SharedWorker'); } catch (e) {}
   LOG('Worker hooks installed');
 
   // ---- WebSocket hook ---------------------------------------------------
-  const NativeWS = window.WebSocket;
+  const NativeWS = W.WebSocket;
   let wsCount = 0, wsMsgCount = 0;
   function hookWebSocket() {
-    if (!NativeWS) { LOG('no window.WebSocket to hook'); return; }
-    window.WebSocket = function (url, protocols) {
+    if (!NativeWS) { LOG('no WebSocket to hook'); return; }
+    W.WebSocket = function (url, protocols) {
       const ws = protocols ? new NativeWS(url, protocols) : new NativeWS(url);
       wsCount++;
       LOG('WebSocket #' + wsCount + ' opened:', url);
@@ -354,9 +370,9 @@
       });
       return ws;
     };
-    try { window.WebSocket.prototype = NativeWS.prototype; } catch (e) {}
+    try { W.WebSocket.prototype = NativeWS.prototype; } catch (e) {}
     Object.getOwnPropertyNames(NativeWS).forEach(k => {
-      try { window.WebSocket[k] = NativeWS[k]; } catch (e) {}
+      try { W.WebSocket[k] = NativeWS[k]; } catch (e) {}
     });
     LOG('WebSocket hook installed');
   }
@@ -448,7 +464,7 @@
     });
     const start = () => obs.observe(document.body, { childList: true, subtree: true });
     if (document.body) start();
-    else window.addEventListener('DOMContentLoaded', start);
+    else document.addEventListener('DOMContentLoaded', start);
     LOG('DOM observer installed');
   }
 
@@ -509,7 +525,7 @@
     const s = panelEl.querySelector('#eb-status');
     if (s) s.innerHTML =
       `<b>${nPicks}</b> picks captured` + (playersLoaded ? '' : ' · loading players…') +
-      `<br><span style="font-size:10px;color:#64748b">ws ${wsCount}/${wsMsgCount} · wkr ${workerCount}/${workerMsgCount} · http ${httpStats.fetch + httpStats.xhr}/${httpStats.hits} · ${window.top !== window.self ? 'iframe' : 'top'}</span>` +
+      `<br><span style="font-size:10px;color:#64748b">ws ${wsCount}/${wsMsgCount} · wkr ${workerCount}/${workerMsgCount} · http ${httpStats.fetch + httpStats.xhr}/${httpStats.hits} · ${W.top !== W.self ? 'iframe' : 'top'}</span>` +
       `<br><span style="font-size:10px;color:#64748b">__ebDump(true) → clipboard</span>`;
     const sizeIn = panelEl.querySelector('#eb-size');
     if (sizeIn && leagueSize && !sizeIn.value) sizeIn.value = leagueSize;
@@ -520,13 +536,13 @@
   loadPlayers();
   heartbeat = setInterval(broadcast, 3000);
   const domReady = () => {
-    if (window.top === window.self) buildPanel();
+    if (W.top === W.self) buildPanel();
     hookDom();
     inferLeagueSize();
     broadcast();
   };
   if (document.body) domReady();
-  else window.addEventListener('DOMContentLoaded', domReady);
+  else document.addEventListener('DOMContentLoaded', domReady);
   setInterval(() => updatePanel([...picksByOverall.values()].filter(p => p.name).length), 2000);
-  LOG('ESPN side active; season', SEASON, VERSION, '| drafty:', LOOKS_DRAFTY, '| iframe:', window.top !== window.self);
+  LOG('ESPN side active; season', SEASON, VERSION, '| drafty:', LOOKS_DRAFTY, '| iframe:', W.top !== W.self);
 })();
