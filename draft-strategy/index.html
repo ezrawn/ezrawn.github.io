@@ -3429,6 +3429,7 @@ function runLiveRecompute() {
   renderLiveBar();
 }
 
+let liveStateSig = '';
 function applyLiveState(state) {
   lastLiveState = state;
   liveConnected = true;
@@ -3446,33 +3447,45 @@ function applyLiveState(state) {
 
   const picks = state.picks || [];
   const hasOverall = picks.some(p => p.overall > 0);
-  liveAutoPath = hasOverall;
 
-  // Which overall pick numbers are mine, in a snake draft
+  // My overall pick numbers in a snake draft (cover a full-length draft, not
+  // just the modelled rounds — extras simply won't match a graph node).
   const myOveralls = new Set();
-  if (hasOverall) {
-    for (let r = 1; r <= maxRound; r++) myOveralls.add(snakePick(draftSlot, leagueSize, r));
-  }
+  for (let r = 1; r <= 24; r++) myOveralls.add(snakePick(draftSlot, leagueSize, r));
 
   const drafted = new Set();
   const mine = [];
+  let matchedCount = 0;
   liveUnmatched = [];
   picks.forEach(pk => {
     const pos = (pk.pos || '').toUpperCase();
     const pl = matchLivePlayer(pk.name, pos, pk.team);
     if (pl) {
+      matchedCount++;
       drafted.add(pl.adp);
-      if (hasOverall && myOveralls.has(pk.overall)) mine.push({ ord: pk.overall, adp: pl.adp });
+      if (pk.overall > 0 && myOveralls.has(pk.overall)) mine.push({ ord: pk.overall, adp: pl.adp });
     } else if (['RB', 'WR', 'TE', 'QB'].includes(pos)) {
       liveUnmatched.push(pk);
     }
   });
   liveDrafted = drafted;
   liveMyPicksAdp = mine.sort((a, b) => a.ord - b.ord).map(x => x.adp);
+  // Only drive the Draft Mode path automatically if we actually recovered an
+  // ordered set of my picks; otherwise just prune pools and let the user click.
+  liveAutoPath = liveMyPicksAdp.length > 0;
   liveLastPick = picks.reduce((m, p) => Math.max(m, p.overall || 0), 0);
-  if (liveUnmatched.length) console.warn('[live] unmatched picks:', liveUnmatched);
+
+  console.log('[live] picks=%d matched=%d drafted=%d mine=[%s] slot=%d size=%d lastPick=%d unmatched=%d',
+    picks.length, matchedCount, drafted.size, liveMyPicksAdp.join(','), draftSlot, leagueSize, liveLastPick, liveUnmatched.length);
+  if (liveUnmatched.length) console.warn('[live] unmatched:', liveUnmatched.map(u => u.name));
 
   persistLive();
+
+  // Skip the (expensive) recompute when nothing material changed — the
+  // userscript re-broadcasts an identical state every few seconds.
+  const sig = liveMyPicksAdp.join(',') + '|' + [...drafted].sort((a, b) => a - b).join(',') + '|' + draftSlot + '|' + leagueSize;
+  if (sig === liveStateSig) { renderLiveBar(); return; }
+  liveStateSig = sig;
   scheduleLiveRecompute();
 }
 
@@ -3514,7 +3527,7 @@ function applyManualPicks(text) {
 }
 
 function enterLiveMode() {
-  liveMode = true; livePaused = false; liveAutoPath = false;
+  liveMode = true; livePaused = false; liveAutoPath = false; liveStateSig = '';
   liveDrafted = new Set(); liveMyPicksAdp = []; liveOffGraph = false; liveUnmatched = [];
   document.getElementById('live-bar').hidden = false;
   document.getElementById('live-toggle-btn').classList.add('on');
@@ -3525,7 +3538,7 @@ function enterLiveMode() {
 }
 
 function exitLiveMode() {
-  liveMode = false; livePaused = false; liveAutoPath = false;
+  liveMode = false; livePaused = false; liveAutoPath = false; liveStateSig = '';
   liveDrafted = new Set(); liveMyPicksAdp = []; liveOffGraph = false; liveUnmatched = [];
   draftPath = []; currentNode = null; draftPickVals = []; draftPickedPlayers = [];
   draftBestRemaining = []; initialBestVal = null;

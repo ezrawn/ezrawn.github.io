@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ESPN Mock Draft → Draft Strategy Network bridge
 // @namespace    ezrawinternelson.com/draft-strategy
-// @version      0.6.0
+// @version      0.7.0
 // @description  Captures picks from an ESPN mock draft room and feeds them into the Draft Strategy Network so drafted players drop off the board and path values update live.
 // @match        *://*.espn.com/*
 // @match        https://ezrawinternelson.com/draft-strategy/*
@@ -60,7 +60,7 @@
   const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
   const STORE_KEY = 'espnMockDraftState';
-  const VERSION = 'v0.6';
+  const VERSION = 'v0.7';
 
   // Ring-buffered log so diagnostics survive any console level filter.
   // In the ESPN console:  __ebDump()  prints everything;  __ebDump(true)  copies it.
@@ -182,18 +182,21 @@
       });
   }
 
-  // ---- settings source: read league draft settings once ------------------
-  // The mDraftDetail REST view returns a STALE/template pick list for mocks, so
-  // it is NOT used for picks (those come from the WS "SELECTED" messages). But
-  // it does carry the real draft order → league size and my slot.
+  // ---- REST poll: backfill picks + full drafted set ---------------------
+  // The WS only streams picks made AFTER we connect, so anything drafted before
+  // the tab loaded (or missed) must come from the API:
+  //   mDraftDetail.picks  → ordered picks with overall # (when populated)
+  //   mTeam roster        → every drafted playerId (authoritative "gone" set)
   let pollCount = 0;
   function pollDraftDetail() {
     pollCount++;
-    if (!LEAGUE_ID) { LOG('no leagueId in URL — cannot read settings'); return; }
+    if (!LEAGUE_ID) { LOG('no leagueId in URL — set slot/size in the panel'); return; }
     const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${SEASON}` +
-                `/segments/0/leagues/${LEAGUE_ID}?view=mDraftDetail`;
+                `/segments/0/leagues/${LEAGUE_ID}?view=mDraftDetail&view=mTeam&view=mRoster`;
     const done = (txt) => {
-      let j; try { j = JSON.parse(txt); } catch (e) { LOG('settings: bad JSON'); return; }
+      let j; try { j = JSON.parse(txt); } catch (e) { LOG('poll: bad JSON'); return; }
+
+      // settings → league size + my slot
       const st = j.settings || {};
       if (st.size >= 4 && st.size <= 20) leagueSize = st.size;
       const order = (st.draftSettings && st.draftSettings.pickOrder) || (j.draftDetail && j.draftDetail.pickOrder);
@@ -201,14 +204,34 @@
         if (!leagueSize) leagueSize = order.length;
         if (MY_TEAM_ID) { const i = order.indexOf(MY_TEAM_ID); if (i >= 0) mySlot = i + 1; }
       }
-      LOG(`settings: size=${leagueSize} slot=${mySlot} (teamId ${MY_TEAM_ID})`);
+
+      // ordered picks (may be placeholders with playerId 0 until made)
+      const apiPicks = (j.draftDetail && j.draftDetail.picks) || [];
+      let withPlayer = 0;
+      apiPicks.forEach(pk => {
+        const pid = pk.playerId || (pk.player && pk.player.id) || 0;
+        const ov = pk.overallPickNumber || pk.overallPick || 0;
+        if (pid > 0) { withPlayer++; addPickById(pid, ov, pk.teamId || 0); }
+      });
+
+      // team rosters → the definitive drafted set (unordered)
+      let rosterN = 0;
+      (j.teams || []).forEach(t => {
+        const entries = (t.roster && t.roster.entries) || [];
+        entries.forEach(e => {
+          const pid = e.playerId || (e.playerPoolEntry && e.playerPoolEntry.id) || 0;
+          if (pid > 0) { rosterN++; addPickById(pid, 0, t.id); }
+        });
+      });
+
+      LOG(`poll #${pollCount}: apiPicks=${apiPicks.length} withPlayer=${withPlayer} roster=${rosterN} captured=${capCount()} size=${leagueSize} slot=${mySlot}`);
       broadcast();
     };
     if (typeof GM_xmlhttpRequest === 'function') {
       GM_xmlhttpRequest({ method: 'GET', url, headers: { accept: 'application/json' },
-        onload: r => done(r.responseText), onerror: () => LOG('settings: xhr error') });
+        onload: r => done(r.responseText), onerror: () => LOG('poll: xhr error') });
     } else {
-      fetch(url, { credentials: 'include' }).then(r => r.text()).then(done).catch(() => LOG('settings: fetch error'));
+      fetch(url, { credentials: 'include' }).then(r => r.text()).then(done).catch(() => LOG('poll: fetch error'));
     }
   }
 
@@ -578,10 +601,11 @@
   hookWebSocket();
   loadPlayers();
   heartbeat = setInterval(broadcast, 3000);
-  // Read league settings (size + my slot) a few times early, then stop — picks
-  // come from the WS "SELECTED" stream, not from polling.
+  // Poll the REST API for settings + backfill (picks before we connected) and
+  // as a safety net alongside the live WS stream.
   if (LEAGUE_ID) {
-    [800, 4000, 12000, 30000].forEach(t => setTimeout(pollDraftDetail, t));
+    setTimeout(pollDraftDetail, 800);
+    setInterval(pollDraftDetail, 4000);
   } else {
     LOG('no leagueId in URL — set slot/size in the panel manually');
   }
