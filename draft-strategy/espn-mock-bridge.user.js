@@ -9,6 +9,7 @@
 // @match        https://ezrawn.github.io/draft-strategy/*
 // @match        http://localhost:*/draft-strategy/*
 // @match        http://127.0.0.1:*/draft-strategy/*
+// @match        file:///*draft-strategy*
 // @run-at       document-start
 // @grant        GM_setValue
 // @grant        GM_getValue

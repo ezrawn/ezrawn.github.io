@@ -3623,6 +3623,20 @@ document.getElementById('hide-drafted-cb').addEventListener('change', e => {
   renderBoard();
 });
 
+// Local dev helper: simulate an ESPN feed without a real draft.
+//   __liveTest(nPicks, slot, size)  — fires the same postMessage the userscript sends.
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) || location.protocol === 'file:'
+    || location.search.includes('livetest')) {
+  window.__liveTest = function (n = 40, slot = 5, size = 10) {
+    const picks = playerData.slice().sort((a, b) => a.adp - b.adp).slice(0, n)
+      .map((p, i) => ({ overall: i + 1, name: p.name, pos: p.posStr, team: p.team }));
+    window.postMessage({ source: 'espn-mock-bridge',
+      state: { connected: true, leagueSize: size, mySlot: slot, picks } }, '*');
+    console.log(`[__liveTest] posted ${n} picks (slot ${slot}, ${size}-team). Click ⚡ Live → Start.`);
+  };
+  console.log('[live] dev helper ready: __liveTest(nPicks, slot, size)');
+}
+
 // Reflect a restored live session into the UI
 if (liveMode) {
   document.getElementById('live-bar').hidden = false;
