@@ -1097,6 +1097,9 @@ let liveUnmatched = [];              // [{name,pos,team}] picks that didn't map 
 let liveOffGraph  = false;           // my live roster sequence isn't a node in the current graph
 let lastLiveState = null;            // most recent raw bridge payload
 let liveRecomputeTimer = null;
+let liveNameIndex = new Map();       // normalised player name → CSV player (built after loadRankings)
+// Hand-fix any ESPN spellings that don't normalise to a CSV name: normalised name → adp
+const LIVE_NAME_OVERRIDES = {};
 
 // A player is out of the pool if the user tagged them "avoid" or they've been drafted live.
 function poolExcluded(p) {
@@ -3336,10 +3339,6 @@ function normLiveName(s) {
     .replace(/[^a-z ]/g, '')
     .replace(/\s+/g, ' ').trim();
 }
-
-let liveNameIndex = new Map();
-// Hand-fix any ESPN spellings that don't normalise to a CSV name: normalised name → adp
-const LIVE_NAME_OVERRIDES = {};
 
 function buildLiveNameIndex() {
   liveNameIndex = new Map();
