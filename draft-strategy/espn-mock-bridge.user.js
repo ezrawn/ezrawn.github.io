@@ -56,7 +56,13 @@
   const LOG = (...a) => console.log('[espn-bridge]', ...a);
   const IS_TOOL = /\/draft-strategy\//.test(location.pathname);
   const IS_ESPN = /(^|\.)espn\.com$/.test(location.hostname) && !IS_TOOL;
-  LOG('loaded on', location.href, '| tool:', IS_TOOL, '| espn:', IS_ESPN, '| frame:', window.top !== window.self);
+  // Loud, level-proof "am I running here?" signal + a global you can check by
+  // typing  __espnBridge  in the console.
+  try {
+    window.__espnBridge = 'v0.2 @ ' + location.href + (window.top !== window.self ? ' [iframe]' : '');
+    console.warn('%c[espn-bridge] script running', 'background:#ea580c;color:#fff;padding:2px 6px;border-radius:3px',
+      '| tool:', IS_TOOL, '| espn:', IS_ESPN, '| iframe:', window.top !== window.self, '|', location.href);
+  } catch (e) {}
 
   // ===========================================================================
   //  TOOL SIDE — forward shared storage into the page
