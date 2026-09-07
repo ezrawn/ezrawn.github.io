@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ESPN Mock Draft → Draft Strategy Network bridge
 // @namespace    ezrawinternelson.com/draft-strategy
-// @version      0.5.0
+// @version      0.6.0
 // @description  Captures picks from an ESPN mock draft room and feeds them into the Draft Strategy Network so drafted players drop off the board and path values update live.
 // @match        *://*.espn.com/*
 // @match        https://ezrawinternelson.com/draft-strategy/*
@@ -60,7 +60,7 @@
   const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
   const STORE_KEY = 'espnMockDraftState';
-  const VERSION = 'v0.5';
+  const VERSION = 'v0.6';
 
   // Ring-buffered log so diagnostics survive any console level filter.
   // In the ESPN console:  __ebDump()  prints everything;  __ebDump(true)  copies it.
@@ -140,9 +140,9 @@
   };
 
   // Running draft state
-  const picksByOverall = new Map();     // overall pick # -> { overall, name, pos, team }
-  const picksByPlayerId = new Map();    // playerId -> overall (dedupe when overall unknown)
-  let seqCounter = 0;                   // fallback ordering when no overall # is present
+  const capPicks = new Map();  // playerId -> { playerId, overall, name, pos, team }
+  const capNamed = new Map();  // name(lc)  -> { overall, name, pos, team }   (DOM fallback only)
+  const capCount = () => capPicks.size + capNamed.size;
   let leagueSize = null;
   let mySlot = Number(GM_getValue('espnBridgeMySlot', 0)) || null;
 
@@ -182,43 +182,33 @@
       });
   }
 
-  // ---- primary source: poll the league's draftDetail ---------------------
-  // The draft room's realtime socket (wss://fantasydraft.espn.com) speaks a
-  // custom line protocol, but this REST view carries the full pick list and is
-  // stable. leagueId/teamId come from the draft URL.
-  let pollTimer = null, pollMisses = 0, pollCount = 0;
+  // ---- settings source: read league draft settings once ------------------
+  // The mDraftDetail REST view returns a STALE/template pick list for mocks, so
+  // it is NOT used for picks (those come from the WS "SELECTED" messages). But
+  // it does carry the real draft order → league size and my slot.
+  let pollCount = 0;
   function pollDraftDetail() {
     pollCount++;
-    if (!LEAGUE_ID) { LOG('no leagueId in URL — cannot poll'); return; }
+    if (!LEAGUE_ID) { LOG('no leagueId in URL — cannot read settings'); return; }
     const url = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${SEASON}` +
                 `/segments/0/leagues/${LEAGUE_ID}?view=mDraftDetail`;
     const done = (txt) => {
-      let j; try { j = JSON.parse(txt); } catch (e) { pollMisses++; LOG('poll: bad JSON'); return; }
-      const dd = j.draftDetail || {};
-      const picks = dd.picks || [];
-      const before = picksByOverall.size;
-      picks.forEach(pk => {
-        const pid = pk.playerId || (pk.player && pk.player.id);
-        const ov = pk.overallPickNumber || pk.overallPick || 0;
-        if (pid > 0 && ov > 0) addPickById(pid, ov, pk.teamId || 0);
-      });
+      let j; try { j = JSON.parse(txt); } catch (e) { LOG('settings: bad JSON'); return; }
       const st = j.settings || {};
       if (st.size >= 4 && st.size <= 20) leagueSize = st.size;
-      const order = st.draftSettings && st.draftSettings.pickOrder;
-      if (Array.isArray(order)) {
+      const order = (st.draftSettings && st.draftSettings.pickOrder) || (j.draftDetail && j.draftDetail.pickOrder);
+      if (Array.isArray(order) && order.length) {
         if (!leagueSize) leagueSize = order.length;
         if (MY_TEAM_ID) { const i = order.indexOf(MY_TEAM_ID); if (i >= 0) mySlot = i + 1; }
       }
-      if (picks.length || picksByOverall.size !== before) {
-        LOG(`poll: server picks=${picks.length} captured=${picksByOverall.size} inProgress=${dd.inProgress} slot=${mySlot} size=${leagueSize}`);
-      }
+      LOG(`settings: size=${leagueSize} slot=${mySlot} (teamId ${MY_TEAM_ID})`);
       broadcast();
     };
     if (typeof GM_xmlhttpRequest === 'function') {
       GM_xmlhttpRequest({ method: 'GET', url, headers: { accept: 'application/json' },
-        onload: r => done(r.responseText), onerror: () => { pollMisses++; LOG('poll: xhr error'); } });
+        onload: r => done(r.responseText), onerror: () => LOG('settings: xhr error') });
     } else {
-      fetch(url, { credentials: 'include' }).then(r => r.text()).then(done).catch(() => { pollMisses++; LOG('poll: fetch error'); });
+      fetch(url, { credentials: 'include' }).then(r => r.text()).then(done).catch(() => LOG('settings: fetch error'));
     }
   }
 
@@ -234,26 +224,28 @@
   }
 
   // ---- adding picks --------------------------------------------------------
-  function addPick({ overall, name, pos, team }) {
-    if (!name) return false;
-    const ov = overall && overall > 0 ? overall : (10000 + (++seqCounter));
-    const prev = picksByOverall.get(ov);
-    if (prev && prev.name === name) return true;
-    picksByOverall.set(ov, { overall: overall && overall > 0 ? overall : 0, name, pos: pos || '', team: team || '' });
-    if (leagueSize == null) inferLeagueSize();
-    return true;
-  }
-
   function addPickById(playerId, overall, teamId) {
-    if (picksByPlayerId.has(playerId) && overall) {
-      // upgrade a seq-ordered pick to a real overall number
-      picksByPlayerId.set(playerId, overall);
-    }
+    if (!playerId) return false;
     if (!playersLoaded) { pendingIdPicks.push({ playerId, overall, teamId }); return false; }
     const info = playerInfo.get(playerId);
     if (!info) { LOG('unknown playerId', playerId); return false; }
-    picksByPlayerId.set(playerId, overall || 0);
-    return addPick({ overall, name: info.name, pos: info.pos, team: info.team });
+    const ex = capPicks.get(playerId);
+    if (ex) { if (overall > 0 && !ex.overall) ex.overall = overall; return true; }
+    capPicks.set(playerId, { playerId, overall: overall || 0, name: info.name, pos: info.pos, team: info.team });
+    return true;
+  }
+
+  // name-only picks (DOM scrape fallback; ESPN normally gives us playerIds)
+  function addPick({ overall, name, pos, team }) {
+    if (!name) return false;
+    const key = name.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (capNamed.has(key)) return true;
+    // don't double-count a player we already have by id
+    for (const p of capPicks.values()) {
+      if (p.name.toLowerCase() === key) return true;
+    }
+    capNamed.set(key, { overall: overall || 0, name, pos: pos || '', team: team || '' });
+    return true;
   }
 
   function inferLeagueSize() {
@@ -269,7 +261,7 @@
   function broadcast() {
     clearTimeout(broadcastTimer);
     broadcastTimer = setTimeout(() => {
-      const picks = [...picksByOverall.values()]
+      const picks = [...capPicks.values(), ...capNamed.values()]
         .filter(p => p.name)
         .sort((a, b) => (a.overall || 1e9) - (b.overall || 1e9));
       const state = {
@@ -294,31 +286,18 @@
   // ---- fetch / XHR hooks -------------------------------------------------
   const httpStats = { fetch: 0, xhr: 0, hits: 0 };
   const httpSeen = [];                       // last ~40 request URLs (for __ebDump)
+  // Picks come from the WS "SELECTED" stream, not HTTP — this hook now only
+  // records request URLs (for __ebDump) and notes league size if it flies by.
   function scanHttpBody(url, text) {
     if (url) { httpSeen.push(url.slice(0, 200)); if (httpSeen.length > 40) httpSeen.shift(); }
-    if (!text) return;
+    if (!text || text.length > 200000) return;
     const c = text.trimStart()[0];
     if (c !== '{' && c !== '[') return;
-    const drafty = /draft|pick|lobby|gambit|league/i.test(url);
-    // Don't parse giant non-drafty bodies (e.g. the full players list) every time.
-    if (text.length > 300000 && !drafty) return;
+    if (!/draft|league|lobby|gambit/i.test(url)) return;
     let obj; try { obj = JSON.parse(text); } catch (e) { return; }
-    const before = picksByOverall.size;
-    scanForPicks(obj, 0);
-    const sz = deepFind(obj, ['size', 'teamCount', 'numberOfTeams', 'leagueSize']);
-    if (sz >= 4 && sz <= 20) leagueSize = sz;
-    if (drafty || picksByOverall.size !== before) {
-      httpStats.hits++;
-      LOG('http', url.slice(0, 140), '→', Array.isArray(obj) ? '[array ' + obj.length + ']' : 'keys:' + Object.keys(obj).slice(0, 14).join(','),
-        '| picks now', picksByOverall.size);
-      broadcast();
-    }
-  }
-  function deepFind(node, keys, depth) {
-    if (!node || typeof node !== 'object' || (depth || 0) > 6) return 0;
-    for (const k of keys) if (typeof node[k] === 'number' && node[k] > 0) return node[k];
-    for (const k in node) { const v = deepFind(node[k], keys, (depth || 0) + 1); if (v) return v; }
-    return 0;
+    httpStats.hits++;
+    const sz = obj && obj.settings && obj.settings.size;
+    if (sz >= 4 && sz <= 20 && !leagueSize) leagueSize = sz;
   }
   const NativeFetch = W.fetch;
   if (NativeFetch) {
@@ -437,33 +416,36 @@
       if (wsSampleLogged < 12) { LOG('ws non-string msg:', Object.prototype.toString.call(data)); wsSampleLogged++; }
       return;
     }
+    const trimmed = data.trimStart();
+
+    // Structured (bamgrid / DSS) frames — scan as JSON, ignore otherwise.
+    if (trimmed[0] === '{' || trimmed[0] === '[') {
+      try { scanForPicks(JSON.parse(trimmed), 0); broadcast(); } catch (e) {}
+      return;
+    }
+
     // fantasydraft.espn.com line protocol: "VERB arg1 arg2 ..."
     const sp = data.indexOf(' ');
     const verb = (sp < 0 ? data : data.slice(0, sp)).trim().toUpperCase();
-    const rest = sp < 0 ? '' : data.slice(sp + 1);
-    const BORING = /^(INIT|TOKEN|CLOCK|AUTOSUGGEST|JOINED|LEFT|PONG|PING|CHAT|MSG|MESSAGE|KEEPALIVE|HEARTBEAT|SETTINGS|ROSTER|MEMBER|STATUS)$/;
-    if (!BORING.test(verb)) {
-      if (wsVerbLogged < 40) { LOG('ws verb:', verb, '|', rest.slice(0, 200)); wsVerbLogged++; }
-      if (/SELECT|PICK|DRAFT/.test(verb)) {
-        LOG('ws PICK-like msg:', data.slice(0, 240));
-        const nums = (rest.match(/\d+/g) || []).map(Number);
-        const pid = nums.find(n => n > 50000);            // ESPN playerIds are large
-        const ov = nums.find(n => n > 0 && n < 600);      // overall pick number
-        if (pid) { addPickById(pid, ov || 0, 0); broadcast(); }
-      }
-    } else if (wsSampleLogged < 12) {
-      LOG('ws msg raw:', data.length > 300 ? data.slice(0, 300) + '…' : data); wsSampleLogged++;
+    const args = (sp < 0 ? '' : data.slice(sp + 1)).trim().split(/\s+/);
+
+    // The ONLY pick message: "SELECTED <overallPick> <playerId> <slotId> [<memberId>]"
+    if (verb === 'SELECTED' || verb === 'SELECTED_PLAYER') {
+      const overall = +args[0] || 0;
+      const playerId = +args[1] || 0;
+      LOG('SELECTED → pick', overall, 'playerId', playerId, playerId && playerInfo.get(playerId) ? '(' + playerInfo.get(playerId).name + ')' : '(unknown)');
+      if (playerId > 0) { addPickById(playerId, overall, 0); broadcast(); }
+      return;
     }
-    // also try JSON in case some frames are structured
-    let obj;
-    try { obj = JSON.parse(data); }
-    catch (e) {
-      const j = data.indexOf('{');
-      if (j >= 0) { try { obj = JSON.parse(data.slice(j)); } catch (e2) { return; } }
-      else return;
+
+    // Everything else (CLOCK, TICK, SELECTING, DRAFT_LIST=queue, AUTODRAFT,
+    // AUTOSUGGEST, JOINED, TOKEN, INIT, PONG…) — never a pick. Log a few
+    // unfamiliar verbs for future tuning, but extract nothing.
+    const KNOWN = /^(INIT|TOKEN|CLOCK|TICK|SELECTING|DRAFT_LIST|AUTODRAFT|AUTOSUGGEST|JOINED|LEFT|PONG|PING|CHAT|MSG|MESSAGE|KEEPALIVE|HEARTBEAT|SETTINGS|ROSTER|MEMBER|STATUS|ONCLOCK|PAUSED|RESUMED)$/;
+    if (!KNOWN.test(verb) && wsVerbLogged < 40) {
+      LOG('ws unknown verb:', verb, '|', args.join(' ').slice(0, 160));
+      wsVerbLogged++;
     }
-    scanForPicks(obj, 0);
-    broadcast();
   }
 
   // Recursively look for pick-shaped objects. ESPN has used several shapes over
@@ -596,12 +578,12 @@
   hookWebSocket();
   loadPlayers();
   heartbeat = setInterval(broadcast, 3000);
-  // Primary pick source: poll the league draftDetail every 2.5s.
+  // Read league settings (size + my slot) a few times early, then stop — picks
+  // come from the WS "SELECTED" stream, not from polling.
   if (LEAGUE_ID) {
-    setTimeout(pollDraftDetail, 1200);      // let the player index load first
-    pollTimer = setInterval(pollDraftDetail, 2500);
+    [800, 4000, 12000, 30000].forEach(t => setTimeout(pollDraftDetail, t));
   } else {
-    LOG('no leagueId — DOM scrape + WS only');
+    LOG('no leagueId in URL — set slot/size in the panel manually');
   }
   const domReady = () => {
     if (W.top === W.self) buildPanel();
@@ -611,6 +593,6 @@
   };
   if (document.body) domReady();
   else document.addEventListener('DOMContentLoaded', domReady);
-  setInterval(() => updatePanel([...picksByOverall.values()].filter(p => p.name).length), 2000);
+  setInterval(() => updatePanel(capCount()), 2000);
   LOG('ESPN side active; season', SEASON, VERSION, '| drafty:', LOOKS_DRAFTY, '| iframe:', W.top !== W.self);
 })();
