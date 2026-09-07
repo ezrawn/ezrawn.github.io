@@ -252,6 +252,22 @@
   };
   LOG('fetch/XHR hooks installed');
 
+  // ---- EventSource (SSE) hook -----------------------------------------
+  const NativeES = window.EventSource;
+  if (NativeES) {
+    window.EventSource = function (url, cfg) {
+      LOG('EventSource opened:', url);
+      const es = cfg ? new NativeES(url, cfg) : new NativeES(url);
+      es.addEventListener('message', ev => {
+        if (wsSampleLogged < 12) { LOG('sse msg raw:', String(ev.data).slice(0, 400)); wsSampleLogged++; }
+        try { handleWsPayload(ev.data); } catch (e) {}
+      });
+      return es;
+    };
+    try { window.EventSource.prototype = NativeES.prototype; } catch (e) {}
+    LOG('EventSource hook installed');
+  }
+
   // ---- WebSocket hook ---------------------------------------------------
   const NativeWS = window.WebSocket;
   let wsCount = 0, wsMsgCount = 0;
@@ -277,6 +293,17 @@
 
   let wsSampleLogged = 0;
   function handleWsPayload(data) {
+    if (data instanceof ArrayBuffer) {
+      try {
+        const s = new TextDecoder('utf-8', { fatal: false }).decode(data);
+        if (wsSampleLogged < 12) { LOG('ws binary→utf8:', s.slice(0, 400)); wsSampleLogged++; }
+        return handleWsPayload(s);
+      } catch (e) { return; }
+    }
+    if (data && typeof data.arrayBuffer === 'function') {           // Blob
+      data.arrayBuffer().then(buf => handleWsPayload(buf)).catch(() => {});
+      return;
+    }
     if (typeof data !== 'string') {
       if (wsSampleLogged < 12) { LOG('ws non-string msg:', Object.prototype.toString.call(data)); wsSampleLogged++; }
       return;
