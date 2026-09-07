@@ -3392,10 +3392,15 @@ function syncLiveDraftPath() {
   draftBestRemaining = []; initialBestVal = null;
   liveOffGraph = false;
   const mine = liveMyPicksAdp.map(adp => playerData.find(p => p.adp === adp)).filter(Boolean);
-  for (const pl of mine) {
+  for (let i = 0; i < mine.length; i++) {
+    const pl = mine[i];
     if (isDraftComplete()) break;
     const next = findNextNode(pl.pos);
-    if (next < 0) { liveOffGraph = true; break; }
+    if (next < 0) {
+      liveOffGraph = true;
+      console.warn(`[live] my pick ${i + 1} (${POS[pl.pos]} ${pl.name}) isn't a node in the current graph — rules too restrictive for my actual roster. Path stops here.`);
+      break;
+    }
     if (initialBestVal === null && playerData.length) {
       computeEdgeValues();
       const bp = rankPaths(1);
