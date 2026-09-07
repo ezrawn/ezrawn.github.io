@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name         ESPN Mock Draft → Draft Strategy Network bridge
 // @namespace    ezrawinternelson.com/draft-strategy
-// @version      0.1.0
+// @version      0.2.0
 // @description  Captures picks from an ESPN mock draft room and feeds them into the Draft Strategy Network so drafted players drop off the board and path values update live.
-// @match        https://fantasy.espn.com/*
-// @match        https://*.fantasy.espn.com/*
+// @match        *://*.espn.com/*
 // @match        https://ezrawinternelson.com/draft-strategy/*
 // @match        https://ezrawn.github.io/draft-strategy/*
 // @match        http://localhost:*/draft-strategy/*
@@ -16,6 +15,8 @@
 // @grant        GM_addValueChangeListener
 // @grant        GM_xmlhttpRequest
 // @connect      lm-api-reads.fantasy.espn.com
+// @connect      fantasy.espn.com
+// @connect      espn.com
 // ==/UserScript==
 
 /*
@@ -54,7 +55,8 @@
   const STORE_KEY = 'espnMockDraftState';
   const LOG = (...a) => console.log('[espn-bridge]', ...a);
   const IS_TOOL = /\/draft-strategy\//.test(location.pathname);
-  const IS_ESPN = /(^|\.)fantasy\.espn\.com$/.test(location.hostname);
+  const IS_ESPN = /(^|\.)espn\.com$/.test(location.hostname) && !IS_TOOL;
+  LOG('loaded on', location.href, '| tool:', IS_TOOL, '| espn:', IS_ESPN, '| frame:', window.top !== window.self);
 
   // ===========================================================================
   //  TOOL SIDE — forward shared storage into the page
@@ -79,6 +81,11 @@
   // ===========================================================================
   //  ESPN SIDE
   // ===========================================================================
+
+  // Only touch draft-ish pages — never patch fetch/XHR or write shared state on
+  // a plain espn.com news tab (that would clobber a live draft's stored picks).
+  const LOOKS_DRAFTY = /fantasy|draft|gambit|lobby/i.test(location.href);
+  if (!LOOKS_DRAFTY) { LOG('not a fantasy/draft page — bridge idle here'); return; }
 
   const SEASON = (new Date().getMonth() >= 2 ? new Date().getFullYear() : new Date().getFullYear() - 1);
   const POS_BY_ID = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
@@ -175,6 +182,7 @@
 
   // ---- broadcast to shared storage ---------------------------------------
   let broadcastTimer = null;
+  let lastBroadcastN = -1;
   function broadcast() {
     clearTimeout(broadcastTimer);
     broadcastTimer = setTimeout(() => {
@@ -189,25 +197,78 @@
         mySlot: mySlot || undefined,
         picks
       };
-      try { GM_setValue(STORE_KEY, state); } catch (e) { LOG('GM_setValue failed', e); }
+      try { GM_setValue(STORE_KEY, state); }
+      catch (e) { LOG('GM_setValue failed', e); }
+      if (picks.length !== lastBroadcastN) { LOG('broadcast:', picks.length, 'picks'); lastBroadcastN = picks.length; }
       updatePanel(picks.length);
     }, 250);
   }
+  // Heartbeat so the tool shows "ESPN connected" even before the first pick.
+  // (Started from the go section, only on draft-ish pages, so plain espn.com
+  //  tabs never clobber a live draft's stored state.)
+  let heartbeat = null;
+
+  // ---- fetch / XHR hooks (mock lobby often polls picks over HTTP) --------
+  const httpStats = { fetch: 0, xhr: 0, hits: 0 };
+  function scanHttpBody(url, text) {
+    if (!text || text[0] !== '{' && text[0] !== '[') return;
+    let obj; try { obj = JSON.parse(text); } catch (e) { return; }
+    // draft-detail / picks endpoints
+    if (/draft|pick|lobby|gambit/i.test(url)) {
+      httpStats.hits++;
+      LOG('http body from', url.slice(0, 120), '→ keys:', Array.isArray(obj) ? '[array]' : Object.keys(obj).slice(0, 12));
+      scanForPicks(obj, 0);
+      // league size hint
+      const sz = deepFind(obj, ['size', 'teamCount', 'numberOfTeams', 'leagueSize']);
+      if (sz >= 4 && sz <= 20) { leagueSize = sz; }
+      broadcast();
+    }
+  }
+  function deepFind(node, keys, depth) {
+    if (!node || typeof node !== 'object' || (depth || 0) > 6) return 0;
+    for (const k of keys) if (typeof node[k] === 'number' && node[k] > 0) return node[k];
+    for (const k in node) { const v = deepFind(node[k], keys, (depth || 0) + 1); if (v) return v; }
+    return 0;
+  }
+  const NativeFetch = window.fetch;
+  if (NativeFetch) {
+    window.fetch = function (...args) {
+      const p = NativeFetch.apply(this, args);
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
+      httpStats.fetch++;
+      p.then(r => { try { r.clone().text().then(t => scanHttpBody(url, t)); } catch (e) {} }).catch(() => {});
+      return p;
+    };
+  }
+  const XOpen = XMLHttpRequest.prototype.open;
+  const XSend = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (m, url) { this.__ebUrl = url; return XOpen.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function () {
+    httpStats.xhr++;
+    this.addEventListener('load', () => {
+      try { scanHttpBody(this.__ebUrl || '', this.responseText); } catch (e) {}
+    });
+    return XSend.apply(this, arguments);
+  };
+  LOG('fetch/XHR hooks installed');
 
   // ---- WebSocket hook ---------------------------------------------------
   const NativeWS = window.WebSocket;
+  let wsCount = 0, wsMsgCount = 0;
   function hookWebSocket() {
-    if (!NativeWS) return;
+    if (!NativeWS) { LOG('no window.WebSocket to hook'); return; }
     window.WebSocket = function (url, protocols) {
       const ws = protocols ? new NativeWS(url, protocols) : new NativeWS(url);
-      LOG('WebSocket opened:', url);
+      wsCount++;
+      LOG('WebSocket #' + wsCount + ' opened:', url);
       ws.addEventListener('message', ev => {
+        wsMsgCount++;
         try { handleWsPayload(ev.data); }
         catch (e) { /* ignore per-message errors */ }
       });
       return ws;
     };
-    window.WebSocket.prototype = NativeWS.prototype;
+    try { window.WebSocket.prototype = NativeWS.prototype; } catch (e) {}
     Object.getOwnPropertyNames(NativeWS).forEach(k => {
       try { window.WebSocket[k] = NativeWS[k]; } catch (e) {}
     });
@@ -216,17 +277,20 @@
 
   let wsSampleLogged = 0;
   function handleWsPayload(data) {
-    if (typeof data !== 'string') return;
+    if (typeof data !== 'string') {
+      if (wsSampleLogged < 12) { LOG('ws non-string msg:', Object.prototype.toString.call(data)); wsSampleLogged++; }
+      return;
+    }
+    if (wsSampleLogged < 12) { LOG('ws msg raw:', data.length > 400 ? data.slice(0, 400) + '…' : data); wsSampleLogged++; }
     let obj;
     try { obj = JSON.parse(data); }
     catch (e) {
-      // Some ESPN frames are newline/pipe delimited wrappers around JSON
       const j = data.indexOf('{');
       if (j >= 0) { try { obj = JSON.parse(data.slice(j)); } catch (e2) { return; } }
       else return;
     }
-    if (wsSampleLogged < 8) { LOG('ws msg sample:', obj); wsSampleLogged++; }
-    scanForPicks(obj);
+    scanForPicks(obj, 0);
+    broadcast();
   }
 
   // Recursively look for pick-shaped objects. ESPN has used several shapes over
@@ -347,7 +411,9 @@
   function updatePanel(nPicks) {
     if (!panelEl) return;
     const s = panelEl.querySelector('#eb-status');
-    if (s) s.textContent = `${nPicks} picks captured` + (playersLoaded ? '' : ' · loading players…');
+    if (s) s.innerHTML =
+      `<b>${nPicks}</b> picks captured` + (playersLoaded ? '' : ' · loading players…') +
+      `<br><span style="font-size:10px;color:#64748b">ws ${wsCount}/${wsMsgCount}msg · http ${httpStats.fetch + httpStats.xhr}/${httpStats.hits}hit · ${window.top !== window.self ? 'iframe' : 'top'}</span>`;
     const sizeIn = panelEl.querySelector('#eb-size');
     if (sizeIn && leagueSize && !sizeIn.value) sizeIn.value = leagueSize;
   }
@@ -355,8 +421,15 @@
   // ---- go --------------------------------------------------------------
   hookWebSocket();
   loadPlayers();
-  const domReady = () => { buildPanel(); hookDom(); inferLeagueSize(); broadcast(); };
+  heartbeat = setInterval(broadcast, 3000);
+  const domReady = () => {
+    if (window.top === window.self) buildPanel();
+    hookDom();
+    inferLeagueSize();
+    broadcast();
+  };
   if (document.body) domReady();
   else window.addEventListener('DOMContentLoaded', domReady);
-  LOG('ESPN side active; season', SEASON);
+  setInterval(() => updatePanel([...picksByOverall.values()].filter(p => p.name).length), 2000);
+  LOG('ESPN side active; season', SEASON, 'v0.2.0 | drafty:', LOOKS_DRAFTY, '| iframe:', window.top !== window.self);
 })();
